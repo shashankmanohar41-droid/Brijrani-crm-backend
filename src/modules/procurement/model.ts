@@ -46,7 +46,7 @@ const purchaseEnquirySchema = new Schema<IPurchaseEnquiry>({
   department: { type: String, required: true },
   requestedBy: { type: String, required: true },
   priority: { type: String, enum: ['Low', 'Medium', 'High', 'Urgent'], required: true, default: 'Medium' },
-  warehouseId: { type: Schema.Types.Mixed, required: true },
+  warehouseId: { type: Schema.Types.Mixed },
   purpose: { type: String },
   status: {
     type: String,
@@ -100,7 +100,7 @@ const purchaseQuotationItemSchema = new Schema<IPurchaseQuotationItem>({
   unit: { type: String, required: true },
   rate: { type: Number, required: true },
   discount: { type: Number, default: 0 },
-  taxPercent: { type: Number, default: 5 },
+  taxPercent: { type: Number, default: 0 },
   taxAmount: { type: Number, required: true },
   lineTotal: { type: Number, required: true },
   deliveryDate: { type: Date, required: true }
@@ -188,7 +188,7 @@ const purchaseOrderItemSchema = new Schema<IPurchaseOrderItem>({
   unit: { type: String, required: true },
   rate: { type: Number, required: true },
   discount: { type: Number, default: 0 },
-  taxPercent: { type: Number, default: 5 },
+  taxPercent: { type: Number, default: 0 },
   taxAmount: { type: Number, required: true },
   amount: { type: Number, required: true },
   expectedDelivery: { type: Date, required: true }
@@ -271,9 +271,12 @@ export interface IGRN extends Document {
   transporter?: string;
   remarks?: string;
   attachment?: string;
-  qualityStatus: 'Pending' | 'Passed' | 'Rejected' | 'Partially Passed';
+  qualityStatus: 'Pending' | 'Passed' | 'Rejected' | 'Partially Passed' | 'On Hold';
   inwardStatus: 'Pending' | 'Completed';
   status: 'Draft' | 'Pending QC' | 'Completed' | 'Cancelled' | 'Accepted' | 'Rejected';
+  grossWeight?: number;
+  tareWeight?: number;
+  netWeight?: number;
   items: IGRNItem[];
   createdBy: string;
 }
@@ -312,26 +315,113 @@ const grnSchema = new Schema<IGRN>({
   transporter: { type: String },
   remarks: { type: String },
   attachment: { type: String },
-  qualityStatus: { type: String, enum: ['Pending', 'Passed', 'Rejected', 'Partially Passed'], default: 'Pending', index: true },
+  qualityStatus: { type: String, enum: ['Pending', 'Passed', 'Rejected', 'Partially Passed', 'On Hold'], default: 'Pending', index: true },
   inwardStatus: { type: String, enum: ['Pending', 'Completed'], default: 'Pending', index: true },
   status: { type: String, enum: ['Draft', 'Pending QC', 'Completed', 'Cancelled', 'Accepted', 'Rejected'], default: 'Pending QC', index: true },
+  grossWeight: { type: Number, default: 0 },
+  tareWeight: { type: Number, default: 0 },
+  netWeight: { type: Number, default: 0 },
   items: [grnItemSchema],
   createdBy: { type: String, required: true }
+}, { timestamps: true });
+
+// Quality Specification Master Model
+export interface IQualitySpecification extends Document {
+  commodityId: any;
+  parameterName: string;
+  limitType: '<=' | '>=' | '<' | '>' | '=' | 'Range' | 'Tolerance' | 'Text';
+  minLimit?: number;
+  maxLimit?: number;
+  textValue?: string;
+  tolerancePercent?: number;
+  unit: string;
+  isOptional: boolean;
+}
+
+const qualitySpecificationSchema = new Schema<IQualitySpecification>({
+  commodityId: { type: Schema.Types.Mixed, required: true, index: true },
+  parameterName: { type: String, required: true },
+  limitType: { type: String, enum: ['<=', '>=', '<', '>', '=', 'Range', 'Tolerance', 'Text'], required: true },
+  minLimit: { type: Number },
+  maxLimit: { type: Number },
+  textValue: { type: String },
+  tolerancePercent: { type: Number },
+  unit: { type: String, required: true },
+  isOptional: { type: Boolean, default: false }
+}, { timestamps: true });
+
+// Quality Sample Collection Model
+export interface IQualitySample extends Document {
+  sampleId: string;
+  grnId: any;
+  grnNo: string;
+  vehicleNo: string;
+  batchNo: string;
+  commodityId: any;
+  totalQuantity: number;
+  sampleQuantity: number;
+  sampleLocation: string;
+  sampleDate: Date;
+  collectedBy: string;
+  sampleCondition: string;
+  remarks?: string;
+}
+
+const qualitySampleSchema = new Schema<IQualitySample>({
+  sampleId: { type: String, required: true, unique: true, index: true },
+  grnId: { type: Schema.Types.Mixed, required: true, index: true },
+  grnNo: { type: String, required: true },
+  vehicleNo: { type: String, required: true },
+  batchNo: { type: String, required: true },
+  commodityId: { type: Schema.Types.Mixed, required: true },
+  totalQuantity: { type: Number, required: true },
+  sampleQuantity: { type: Number, required: true },
+  sampleLocation: { type: String, required: true },
+  sampleDate: { type: Date, required: true, default: Date.now },
+  collectedBy: { type: String, required: true },
+  sampleCondition: { type: String, required: true },
+  remarks: { type: String }
+}, { timestamps: true });
+
+// Quality Audit Log Model
+export interface IQualityAuditLog extends Document {
+  inspectionId: any;
+  parameterName: string;
+  oldValue: string;
+  newValue: string;
+  changedBy: string;
+  reason: string;
+}
+
+const qualityAuditLogSchema = new Schema<IQualityAuditLog>({
+  inspectionId: { type: Schema.Types.Mixed, required: true, index: true },
+  parameterName: { type: String, required: true },
+  oldValue: { type: String, required: true },
+  newValue: { type: String, required: true },
+  changedBy: { type: String, required: true },
+  reason: { type: String, required: true }
 }, { timestamps: true });
 
 // 5. Quality Inspection
 export interface IQualityInspectionItem {
   item: any;
   quantity: number;
-  moisturePercent: number;
-  grade: 'A' | 'B' | 'C' | 'Rejected';
+  moisturePercent: number; // backward compatibility
+  grade: string; // e.g. 'A' | 'B' | 'C' | 'Rejected'
   color: string;
   foreignMaterialPercent: number;
   damagePercent: number;
   purityPercent: number;
   qualityScore: number;
-  status: 'Pending' | 'Passed' | 'Partially Passed' | 'Rejected';
+  status: 'PASS' | 'FAIL' | 'WARN';
   remarks?: string;
+  // Dynamic parameters structure
+  testedParameters?: Array<{
+    parameterName: string;
+    allowedLimit: string;
+    actualValue: any;
+    status: 'PASS' | 'FAIL' | 'WARN';
+  }>;
 }
 
 export interface IQualityInspection extends Document {
@@ -339,23 +429,48 @@ export interface IQualityInspection extends Document {
   grnNo: string;
   inspector: string;
   date: Date;
-  status: 'Pending' | 'Passed' | 'Partially Passed' | 'Rejected';
+  status: 'Inspection Requested' | 'Sample Collected' | 'Testing' | 'Completed' | 'Pending Approval' | 'Approved' | 'Stock Released' | 'Rejected' | 'Partially Accepted' | 'On Hold' | 'Cancelled';
+  decision: 'ACCEPT' | 'PARTIAL ACCEPT' | 'REJECT' | 'HOLD';
+  grade: string; // e.g. Grade A, Grade B
+  receivedQuantity: number;
+  acceptedQuantity: number;
+  rejectedQuantity: number;
+  holdQuantity: number;
+  damagedQuantity: number;
+  basePrice?: number;
+  finalPrice?: number;
+  priceDeduction?: number;
+  reInspectionOf?: any;
   notes?: string;
+  sampleId?: string;
   items: IQualityInspectionItem[];
+  approvalHistory?: Array<{
+    step: string;
+    user: string;
+    action: string;
+    date: Date;
+    comment?: string;
+  }>;
 }
 
 const qualityInspectionItemSchema = new Schema<IQualityInspectionItem>({
   item: { type: Schema.Types.Mixed, required: true },
   quantity: { type: Number, required: true },
-  moisturePercent: { type: Number, required: true },
-  grade: { type: String, enum: ['A', 'B', 'C', 'Rejected'], required: true },
-  color: { type: String, required: true },
+  moisturePercent: { type: Number, default: 0 },
+  grade: { type: String, required: true },
+  color: { type: String, default: 'N/A' },
   foreignMaterialPercent: { type: Number, default: 0 },
   damagePercent: { type: Number, default: 0 },
   purityPercent: { type: Number, default: 100 },
-  qualityScore: { type: Number, required: true },
-  status: { type: String, enum: ['Pending', 'Passed', 'Partially Passed', 'Rejected'], required: true },
-  remarks: { type: String }
+  qualityScore: { type: Number, default: 100 },
+  status: { type: String, enum: ['PASS', 'FAIL', 'WARN'], default: 'PASS' },
+  remarks: { type: String },
+  testedParameters: [{
+    parameterName: { type: String, required: true },
+    allowedLimit: { type: String, required: true },
+    actualValue: { type: Schema.Types.Mixed, required: true },
+    status: { type: String, enum: ['PASS', 'FAIL', 'WARN'], required: true }
+  }]
 });
 
 const qualityInspectionSchema = new Schema<IQualityInspection>({
@@ -363,9 +478,33 @@ const qualityInspectionSchema = new Schema<IQualityInspection>({
   grnNo: { type: String, required: true },
   inspector: { type: String, required: true },
   date: { type: Date, required: true, default: Date.now },
-  status: { type: String, enum: ['Pending', 'Passed', 'Partially Passed', 'Rejected'], default: 'Passed', index: true },
+  status: { 
+    type: String, 
+    enum: ['Inspection Requested', 'Sample Collected', 'Testing', 'Completed', 'Pending Approval', 'Approved', 'Stock Released', 'Rejected', 'Partially Accepted', 'On Hold', 'Cancelled'], 
+    default: 'Completed', 
+    index: true 
+  },
+  decision: { type: String, enum: ['ACCEPT', 'PARTIAL ACCEPT', 'REJECT', 'HOLD'], default: 'ACCEPT', index: true },
+  grade: { type: String, default: 'Grade A' },
+  receivedQuantity: { type: Number, default: 0 },
+  acceptedQuantity: { type: Number, default: 0 },
+  rejectedQuantity: { type: Number, default: 0 },
+  holdQuantity: { type: Number, default: 0 },
+  damagedQuantity: { type: Number, default: 0 },
+  basePrice: { type: Number, default: 0 },
+  finalPrice: { type: Number, default: 0 },
+  priceDeduction: { type: Number, default: 0 },
+  reInspectionOf: { type: Schema.Types.Mixed },
   notes: { type: String },
-  items: [qualityInspectionItemSchema]
+  sampleId: { type: String },
+  items: [qualityInspectionItemSchema],
+  approvalHistory: [{
+    step: { type: String, required: true },
+    user: { type: String, required: true },
+    action: { type: String, required: true },
+    date: { type: Date, default: Date.now },
+    comment: { type: String }
+  }]
 }, { timestamps: true });
 
 // 6. Purchase Invoice
@@ -407,6 +546,9 @@ export interface IPurchaseInvoice extends Document {
   items: IPurchaseInvoiceItem[];
   mismatchReason?: string;
   createdBy: string;
+  amountPaid?: number;
+  remainingAmount?: number;
+  paymentHistory?: any[];
 }
 
 const purchaseInvoiceItemSchema = new Schema<IPurchaseInvoiceItem>({
@@ -416,7 +558,7 @@ const purchaseInvoiceItemSchema = new Schema<IPurchaseInvoiceItem>({
   invoiceQty: { type: Number, required: true },
   rate: { type: Number, required: true },
   discount: { type: Number, default: 0 },
-  taxPercent: { type: Number, default: 5 },
+  taxPercent: { type: Number, default: 0 },
   taxAmount: { type: Number, required: true },
   amount: { type: Number, required: true }
 });
@@ -451,7 +593,89 @@ const purchaseInvoiceSchema = new Schema<IPurchaseInvoice>({
   },
   items: [purchaseInvoiceItemSchema],
   mismatchReason: { type: String },
-  createdBy: { type: String, required: true }
+  createdBy: { type: String, required: true },
+  amountPaid: { type: Number, default: 0 },
+  remainingAmount: { type: Number },
+  paymentHistory: { type: [Schema.Types.Mixed], default: [] }
+}, { timestamps: true });
+
+export interface IPurchaseReturnItem {
+  commodityId: any;
+  batchNo: string;
+  binId: any;
+  quantity: number;
+  unit: string;
+  rate: number;
+  taxableAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  reason: string;
+}
+
+export interface IPurchaseReturn extends Document {
+  returnNumber: string;
+  returnDate: Date;
+  supplierId: any;
+  purchaseOrderId?: any;
+  grnId?: any;
+  purchaseInvoiceId?: any;
+  warehouseId: any;
+  items: IPurchaseReturnItem[];
+  returnType: 'Full' | 'Partial' | 'Quality';
+  reason: string;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  freight: number;
+  grandTotal: number;
+  debitNoteId?: string;
+  status: 'Draft' | 'Submitted' | 'Pending Approval' | 'Approved' | 'Goods Outward' | 'Completed' | 'Rejected';
+  approvedBy?: string;
+  approvedAt?: Date;
+  createdBy: string;
+  remarks?: string;
+}
+
+const purchaseReturnItemSchema = new Schema<IPurchaseReturnItem>({
+  commodityId: { type: Schema.Types.Mixed, required: true },
+  batchNo: { type: String, required: true },
+  binId: { type: Schema.Types.Mixed, required: true },
+  quantity: { type: Number, required: true },
+  unit: { type: String, required: true },
+  rate: { type: Number, required: true },
+  taxableAmount: { type: Number, required: true },
+  taxAmount: { type: Number, required: true },
+  totalAmount: { type: Number, required: true },
+  reason: { type: String, required: true }
+});
+
+const purchaseReturnSchema = new Schema<IPurchaseReturn>({
+  returnNumber: { type: String, required: true, unique: true, index: true },
+  returnDate: { type: Date, required: true, default: Date.now },
+  supplierId: { type: Schema.Types.Mixed, required: true, index: true },
+  purchaseOrderId: { type: Schema.Types.Mixed },
+  grnId: { type: Schema.Types.Mixed },
+  purchaseInvoiceId: { type: Schema.Types.Mixed },
+  warehouseId: { type: Schema.Types.Mixed, required: true },
+  items: [purchaseReturnItemSchema],
+  returnType: { type: String, enum: ['Full', 'Partial', 'Quality'], required: true },
+  reason: { type: String, required: true },
+  subtotal: { type: Number, required: true, default: 0 },
+  discount: { type: Number, default: 0 },
+  tax: { type: Number, default: 0 },
+  freight: { type: Number, default: 0 },
+  grandTotal: { type: Number, required: true, default: 0 },
+  debitNoteId: { type: String },
+  status: { 
+    type: String, 
+    enum: ['Draft', 'Submitted', 'Pending Approval', 'Approved', 'Goods Outward', 'Completed', 'Rejected'], 
+    default: 'Draft',
+    index: true 
+  },
+  approvedBy: { type: String },
+  approvedAt: { type: Date },
+  createdBy: { type: String, required: true },
+  remarks: { type: String }
 }, { timestamps: true });
 
 export const PurchaseEnquiry = model<IPurchaseEnquiry>('PurchaseEnquiry', purchaseEnquirySchema);
@@ -460,3 +684,7 @@ export const PurchaseOrder = model<IPurchaseOrder>('PurchaseOrder', purchaseOrde
 export const GRN = model<IGRN>('GRN', grnSchema);
 export const QualityInspection = model<IQualityInspection>('QualityInspection', qualityInspectionSchema);
 export const PurchaseInvoice = model<IPurchaseInvoice>('PurchaseInvoice', purchaseInvoiceSchema);
+export const QualitySpecification = model<IQualitySpecification>('QualitySpecification', qualitySpecificationSchema);
+export const QualitySample = model<IQualitySample>('QualitySample', qualitySampleSchema);
+export const QualityAuditLog = model<IQualityAuditLog>('QualityAuditLog', qualityAuditLogSchema);
+export const PurchaseReturn = model<IPurchaseReturn>('PurchaseReturn', purchaseReturnSchema);

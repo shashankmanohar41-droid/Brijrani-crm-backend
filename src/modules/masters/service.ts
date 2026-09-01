@@ -133,7 +133,7 @@ export const mastersService = {
       category: data.category,
       unit: data.unit || 'MT',
       hsn: data.hsn,
-      gstRate: data.gstRate || 5,
+      gstRate: data.gstRate !== undefined ? Number(data.gstRate) : 5,
       purchasePrice: data.purchasePrice || 0,
       sellingPrice: data.sellingPrice || 0,
       minimumStock: data.minimumStock || 10,

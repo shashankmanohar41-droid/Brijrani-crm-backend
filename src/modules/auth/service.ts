@@ -99,7 +99,8 @@ export const authService = {
   },
 
   login: async (data: any): Promise<{ user: IUser; accessToken: string; refreshToken: string }> => {
-    const user = await User.findOne({ email: data.email });
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+    const user = await User.findOne({ email: { $regex: new RegExp(`^${cleanEmail}$`, 'i') } });
     if (!user) {
       throw new CustomError('Invalid email or password', 401);
     }

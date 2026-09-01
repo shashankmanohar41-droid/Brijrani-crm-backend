@@ -186,7 +186,8 @@ export const procurementController = {
 
   updateQualityInspection: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const qi = await procurementService.updateQualityInspection(req.params.id as string, req.body);
+      const email = req.user?.id || 'admin';
+      const qi = await procurementService.updateQualityInspection(req.params.id as string, req.body, email);
       sendSuccess(res, 'Quality Inspection updated successfully', qi);
     } catch (err) {
       next(err);
@@ -197,6 +198,208 @@ export const procurementController = {
     try {
       const q = await procurementService.updateQuotation(req.params.id as string, req.body);
       sendSuccess(res, 'Purchase Quotation updated successfully', q);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getSpecs: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const list = await procurementService.getSpecs(req.query.commodityId as string);
+      sendSuccess(res, 'Specs retrieved successfully', list);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  createSpec: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const spec = await procurementService.createSpec(req.body);
+      sendSuccess(res, 'Spec created successfully', spec, 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deleteSpec: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const spec = await procurementService.deleteSpec(req.params.id as string);
+      sendSuccess(res, 'Spec deleted successfully', spec);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getSamples: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const list = await procurementService.getSamples();
+      sendSuccess(res, 'Samples retrieved successfully', list);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  createSample: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const email = req.user?.id || 'admin';
+      const sample = await procurementService.createSample(req.body, email);
+      sendSuccess(res, 'Sample tag created successfully', sample, 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getAuditLogs: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const list = await procurementService.getAuditLogs(req.params.id as string);
+      sendSuccess(res, 'Audit logs retrieved successfully', list);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getQcDashboard: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const stats = await procurementService.getQcDashboard();
+      sendSuccess(res, 'QC stats dashboard retrieved successfully', stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getPurchaseReturns: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const list = await procurementService.getPurchaseReturns();
+      sendSuccess(res, 'Purchase Returns retrieved successfully', list);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getPurchaseReturnById: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const pr = await procurementService.getPurchaseReturnById(req.params.id as string);
+      sendSuccess(res, 'Purchase Return retrieved successfully', pr);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  createPurchaseReturn: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const email = req.user?.id || 'admin';
+      const pr = await procurementService.createPurchaseReturn(req.body, email);
+      sendSuccess(res, 'Purchase Return request created successfully', pr, 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  submitPurchaseReturn: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const pr = await procurementService.submitPurchaseReturn(req.params.id as string);
+      sendSuccess(res, 'Purchase Return request submitted successfully', pr);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  approvePurchaseReturn: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const email = req.user?.id || 'admin';
+      const pr = await procurementService.approvePurchaseReturn(req.params.id as string, email);
+      sendSuccess(res, 'Purchase Return approved successfully', pr);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  rejectPurchaseReturn: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const pr = await procurementService.rejectPurchaseReturn(req.params.id as string);
+      sendSuccess(res, 'Purchase Return request rejected', pr);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  dispatchPurchaseReturn: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const email = req.user?.id || 'admin';
+      const pr = await procurementService.dispatchPurchaseReturn(req.params.id as string, email);
+      sendSuccess(res, 'Purchase Return dispatched & stock deducted successfully', pr);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  completePurchaseReturn: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const pr = await procurementService.completePurchaseReturn(req.params.id as string);
+      sendSuccess(res, 'Purchase Return completed & supplier balance adjusted successfully', pr);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deleteEnquiry: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await procurementService.deleteEnquiry(req.params.id as string);
+      sendSuccess(res, 'Purchase Enquiry deleted successfully', data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deleteQuotation: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await procurementService.deleteQuotation(req.params.id as string);
+      sendSuccess(res, 'Purchase Quotation deleted successfully', data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deletePO: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await procurementService.deletePO(req.params.id as string);
+      sendSuccess(res, 'Purchase Order deleted successfully', data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deleteGRN: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await procurementService.deleteGRN(req.params.id as string);
+      sendSuccess(res, 'GRN deleted successfully', data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deleteInvoice: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await procurementService.deleteInvoice(req.params.id as string);
+      sendSuccess(res, 'Purchase Invoice deleted successfully', data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deletePurchaseReturn: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await procurementService.deletePurchaseReturn(req.params.id as string);
+      sendSuccess(res, 'Purchase Return deleted successfully', data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  deleteQualityInspection: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await procurementService.deleteQualityInspection(req.params.id as string);
+      sendSuccess(res, 'Quality Inspection deleted successfully', data);
     } catch (err) {
       next(err);
     }

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { SalesEnquiry, SalesQuotation, SalesOrder, PickingTask, PackingSlip, SalesInvoice } from './model';
+import { SalesEnquiry, SalesQuotation, SalesOrder, PickingTask, PackingSlip, SalesInvoice, SalesReturn, ReturnInspection, CreditNote, Refund, SalesTarget, SalesCommission, SalesApproval, SalesNotification, SalesAuditLog } from './model';
 import { Customer } from '../customers/model';
 import { Commodity } from '../commodities/model';
 import { Warehouse, Bin } from '../warehouse/model';
@@ -421,5 +421,353 @@ export const salesService = {
 
   listInvoices: async () => {
     return await SalesInvoice.find({}).sort({ invoiceDate: -1 });
+  },
+
+  listEnquiries: async () => {
+    return await SalesEnquiry.find({}).sort({ date: -1 });
+  },
+
+  listQuotations: async () => {
+    return await SalesQuotation.find({}).sort({ date: -1 });
+  },
+
+  listOrders: async () => {
+    return await SalesOrder.find({}).sort({ date: -1 });
+  },
+
+  listPickLists: async () => {
+    return await PickingTask.find({}).sort({ date: -1 });
+  },
+
+  listPackages: async () => {
+    return await PackingSlip.find({}).sort({ packingDate: -1 });
+  },
+
+  listDeliveries: async () => {
+    return await DeliveryChallan.find({}).sort({ dispatchDate: -1 });
+  },
+
+  listReturns: async () => {
+    return await SalesReturn.find({}).sort({ date: -1 });
+  },
+
+  listCreditNotes: async () => {
+    return await CreditNote.find({}).sort({ date: -1 });
+  },
+
+  listRefunds: async () => {
+    return await Refund.find({}).sort({ date: -1 });
+  },
+
+  // Target and Commission Management
+  listTargets: async () => {
+    return await SalesTarget.find({}).sort({ period: -1 });
+  },
+
+  createTarget: async (data: any, createdBy: string) => {
+    const target = new SalesTarget({
+      employee: data.employee,
+      period: data.period,
+      targetAmount: data.targetAmount,
+      actualAmount: 0,
+      createdBy
+    });
+    return await target.save();
+  },
+
+  listCommissions: async () => {
+    return await SalesCommission.find({}).sort({ createdAt: -1 });
+  },
+
+  // Document status updates & approvals
+  updateQuotationStatus: async (id: string, status: string, user: string) => {
+    const q = await SalesQuotation.findByIdAndUpdate(id, { status }, { new: true });
+    if (!q) throw new CustomError('Quotation not found', 404);
+    await salesService.logAudit(user, 'QUOTATION_UPDATE', 'Quotation', String(q._id), '', status);
+    return q;
+  },
+
+  updateOrderStatus: async (id: string, status: string, user: string) => {
+    const o = await SalesOrder.findByIdAndUpdate(id, { status }, { new: true });
+    if (!o) throw new CustomError('Order not found', 404);
+    await salesService.logAudit(user, 'ORDER_UPDATE', 'SalesOrder', String(o._id), '', status);
+    return o;
+  },
+
+  // Customer statement ledger builder
+  getCustomerStatement: async (customerId: string) => {
+    const customer = await Customer.findById(customerId);
+    if (!customer) throw new CustomError('Customer not found', 404);
+
+    const invoices = await SalesInvoice.find({ customerId });
+    const vouchers = await Voucher.find({ partyId: customerId, partyType: 'customer', status: 'Approved' });
+    const creditNotes = await CreditNote.find({ customerId, status: 'Approved' });
+
+    const ledger: any[] = [];
+
+    invoices.forEach(inv => {
+      ledger.push({
+        date: inv.invoiceDate,
+        type: 'Invoice',
+        docNo: inv.invoiceNo,
+        debit: inv.grandTotal,
+        credit: 0,
+        balance: 0
+      });
+    });
+
+    vouchers.forEach(v => {
+      ledger.push({
+        date: v.date,
+        type: v.voucherType,
+        docNo: v.voucherNumber,
+        debit: v.voucherType === 'Payment' ? v.amount : 0,
+        credit: v.voucherType === 'Receipt' ? v.amount : 0,
+        balance: 0
+      });
+    });
+
+    creditNotes.forEach(cn => {
+      ledger.push({
+        date: cn.date,
+        type: 'Credit Note',
+        docNo: cn.creditNoteNo,
+        debit: 0,
+        credit: cn.totalAmount,
+        balance: 0
+      });
+    });
+
+    // Sort by date ascending
+    ledger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let runningBalance = customer.openingBalance || 0;
+    ledger.forEach(row => {
+      runningBalance += row.debit - row.credit;
+      row.balance = runningBalance;
+    });
+
+    return {
+      customer,
+      openingBalance: customer.openingBalance,
+      closingBalance: runningBalance,
+      ledger
+    };
+  },
+
+  // Aging Report
+  getReceivableAging: async () => {
+    const customers = await Customer.find({});
+    const invoices = await SalesInvoice.find({ paymentStatus: { $ne: 'Paid' } });
+
+    const now = new Date();
+    const result = customers.map(cust => {
+      const custInvoices = invoices.filter(inv => String(inv.customerId) === String(cust._id));
+      
+      let current = 0;
+      let d1_30 = 0;
+      let d31_60 = 0;
+      let d61_90 = 0;
+      let d91_180 = 0;
+      let d180plus = 0;
+
+      custInvoices.forEach(inv => {
+        const diffTime = Math.abs(now.getTime() - new Date(inv.invoiceDate).getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const amount = inv.grandTotal;
+
+        if (diffDays <= 0) current += amount;
+        else if (diffDays <= 30) d1_30 += amount;
+        else if (diffDays <= 60) d31_60 += amount;
+        else if (diffDays <= 90) d61_90 += amount;
+        else if (diffDays <= 180) d91_180 += amount;
+        else d180plus += amount;
+      });
+
+      return {
+        customerId: cust._id,
+        customerName: cust.name,
+        companyName: cust.companyName,
+        totalOutstanding: current + d1_30 + d31_60 + d61_90 + d91_180 + d180plus,
+        current,
+        '1-30 Days': d1_30,
+        '31-60 Days': d31_60,
+        '61-90 Days': d61_90,
+        '91-180 Days': d91_180,
+        '180+ Days': d180plus
+      };
+    });
+
+    return result.filter(r => r.totalOutstanding > 0);
+  },
+
+  // Dashboard Aggregator
+  getDashboard: async (filters: any) => {
+    let dateMatch: any = {};
+    if (filters.startDate && filters.endDate) {
+      dateMatch = {
+        invoiceDate: {
+          $gte: new Date(filters.startDate),
+          $lte: new Date(filters.endDate)
+        }
+      };
+    }
+
+    const invoices = await SalesInvoice.find(dateMatch);
+    const orders = await SalesOrder.find({});
+    const quotes = await SalesQuotation.find({});
+    const returns = await SalesReturn.find({});
+    const creditNotes = await CreditNote.find({});
+    const customers = await Customer.find({});
+
+    const totalSales = invoices.reduce((sum, item) => sum + item.grandTotal, 0);
+    const totalTax = invoices.reduce((sum, item) => sum + (item.cgst + item.sgst + item.igst), 0);
+    const totalOutstanding = invoices.filter(i => i.paymentStatus !== 'Paid').reduce((sum, item) => sum + item.grandTotal, 0);
+
+    const orderStats = {
+      total: orders.length,
+      pending: orders.filter(o => o.status === 'Draft' || o.status === 'Pending Approval').length,
+      confirmed: orders.filter(o => o.status === 'Approved').length,
+      picking: orders.filter(o => o.status === 'Picking').length,
+      packed: orders.filter(o => o.status === 'Packed').length,
+      shipped: orders.filter(o => o.status === 'Shipped').length,
+      completed: orders.filter(o => o.status === 'Completed').length,
+      cancelled: orders.filter(o => o.status === 'Cancelled').length
+    };
+
+    const quoteStats = {
+      total: quotes.length,
+      pending: quotes.filter(q => q.status === 'Draft' || q.status === 'Sent').length,
+      accepted: quotes.filter(q => q.status === 'Accepted' || q.status === 'Converted').length,
+      expired: quotes.filter(q => q.status === 'Expired').length
+    };
+
+    return {
+      totalSales,
+      totalTax,
+      totalOutstanding,
+      totalCustomers: customers.length,
+      orderStats,
+      quoteStats,
+      totalReturns: returns.length,
+      refundAmount: creditNotes.reduce((sum, item) => sum + item.totalAmount, 0),
+      gstCollected: totalTax
+    };
+  },
+
+  // Returns and Inspections Lifecycle
+  createReturn: async (data: any, createdBy: string) => {
+    const returnNo = `SRN-2026-${String(await SalesReturn.countDocuments() + 1).padStart(5, '0')}`;
+    const sr = new SalesReturn({
+      returnNo,
+      customerId: new mongoose.Types.ObjectId(data.customerId),
+      invoiceId: data.invoiceId ? new mongoose.Types.ObjectId(data.invoiceId) : undefined,
+      soId: data.soId ? new mongoose.Types.ObjectId(data.soId) : undefined,
+      date: new Date(data.date || Date.now()),
+      reason: data.reason,
+      items: data.items.map((i: any) => ({
+        commodityId: new mongoose.Types.ObjectId(i.commodityId),
+        quantity: i.quantity,
+        rate: i.rate,
+        batchNo: i.batchNo
+      })),
+      status: 'Requested',
+      createdBy
+    });
+    return await sr.save();
+  },
+
+  inspectReturn: async (data: any, user: string) => {
+    return await runInTransaction(async (session) => {
+      const returnRequest = await SalesReturn.findById(data.returnId);
+      if (!returnRequest) throw new CustomError('Return request not found', 404);
+      if (returnRequest.status === 'Completed') throw new CustomError('Return already processed', 400);
+
+      const inspectionNo = `INS-2026-${String(await ReturnInspection.countDocuments() + 1).padStart(5, '0')}`;
+      const inspection = new ReturnInspection({
+        inspectionNo,
+        returnId: returnRequest._id,
+        date: new Date(),
+        inspector: user,
+        items: data.items.map((i: any) => ({
+          commodityId: new mongoose.Types.ObjectId(i.commodityId),
+          quantity: i.quantity,
+          condition: i.condition,
+          result: i.result
+        })),
+        status: 'Completed'
+      });
+      await (session ? inspection.save({ session }) : inspection.save());
+
+      // If accepted, add stock back to warehouse inventory
+      for (const item of data.items) {
+        if (item.result === 'Accepted') {
+          const dummyBin = await Bin.findOne({});
+          const binId = dummyBin ? String(dummyBin._id) : 'N/A';
+          const whId = dummyBin ? String(dummyBin.warehouseId) : 'N/A';
+
+          await inventoryService.createStockLedgerEntry(session, {
+            commodityId: String(item.commodityId),
+            batchNo: item.batchNo || 'BAT-RETURN',
+            warehouseId: whId,
+            binId,
+            referenceType: 'SALES_RETURN',
+            referenceId: returnRequest.returnNo,
+            quantityIn: item.quantity,
+            quantityOut: 0,
+            unitCost: item.rate,
+            createdBy: user
+          });
+        }
+      }
+
+      // Generate Credit Note
+      const creditNoteNo = `CN-2026-${String(await CreditNote.countDocuments() + 1).padStart(5, '0')}`;
+      const taxableAmount = data.items.reduce((sum: number, i: any) => sum + (i.quantity * i.rate), 0);
+      const tax = taxableAmount * 0.05; // 5% default
+      const grandTotal = taxableAmount + tax;
+
+      const cn = new CreditNote({
+        creditNoteNo,
+        returnId: returnRequest._id,
+        invoiceId: returnRequest.invoiceId,
+        customerId: returnRequest.customerId,
+        date: new Date(),
+        reason: returnRequest.reason,
+        taxableAmount,
+        cgst: tax / 2,
+        sgst: tax / 2,
+        igst: 0,
+        totalAmount: grandTotal,
+        status: 'Approved',
+        createdBy: user
+      });
+      await (session ? cn.save({ session }) : cn.save());
+
+      // Update customer outstanding receivable reduction
+      await Customer.updateOne(
+        { _id: returnRequest.customerId },
+        { $inc: { balance: -grandTotal } },
+        { session }
+      );
+
+      returnRequest.status = 'Completed';
+      await (session ? returnRequest.save({ session }) : returnRequest.save());
+
+      return { inspection, cn };
+    });
+  },
+
+  // Audit Logs
+  logAudit: async (user: string, action: string, module: string, recordId: string, oldValue: string, newValue: string) => {
+    const log = new SalesAuditLog({
+      user,
+      action,
+      module,
+      recordId,
+      oldValue,
+      newValue
+    });
+    await log.save();
   }
 };
