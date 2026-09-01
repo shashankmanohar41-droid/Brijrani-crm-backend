@@ -46,7 +46,12 @@ if (process.env.FRONTEND_URL) {
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.some(o => origin.startsWith(o))) {
+    if (
+      allowedOrigins.indexOf(origin) !== -1 || 
+      allowedOrigins.some(o => origin.startsWith(o)) ||
+      origin.includes('vercel.app') ||
+      origin.includes('brijrani')
+    ) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'), false);
