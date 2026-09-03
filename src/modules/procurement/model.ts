@@ -259,6 +259,10 @@ export interface IGRN extends Document {
   grnNo: string;
   poId: any;
   poNo: string;
+  invoiceId?: any;
+  invoiceNo?: string;
+  qcId?: any;
+  qcNo?: string;
   date: Date;
   partyType: 'supplier' | 'farmer';
   partyId: any;
@@ -303,6 +307,10 @@ const grnSchema = new Schema<IGRN>({
   grnNo: { type: String, required: true, unique: true, index: true },
   poId: { type: Schema.Types.Mixed, required: true, index: true },
   poNo: { type: String, required: true },
+  invoiceId: { type: Schema.Types.Mixed, index: true },
+  invoiceNo: { type: String },
+  qcId: { type: Schema.Types.Mixed, index: true },
+  qcNo: { type: String },
   date: { type: Date, required: true, default: Date.now },
   partyType: { type: String, enum: ['supplier', 'farmer'], required: true },
   partyId: { type: Schema.Types.Mixed, required: true },
@@ -425,8 +433,11 @@ export interface IQualityInspectionItem {
 }
 
 export interface IQualityInspection extends Document {
-  grnId: any;
-  grnNo: string;
+  qcNo?: string;
+  poId?: any;
+  poNo?: string;
+  grnId?: any;
+  grnNo?: string;
   inspector: string;
   date: Date;
   status: 'Inspection Requested' | 'Sample Collected' | 'Testing' | 'Completed' | 'Pending Approval' | 'Approved' | 'Stock Released' | 'Rejected' | 'Partially Accepted' | 'On Hold' | 'Cancelled';
@@ -474,8 +485,11 @@ const qualityInspectionItemSchema = new Schema<IQualityInspectionItem>({
 });
 
 const qualityInspectionSchema = new Schema<IQualityInspection>({
-  grnId: { type: Schema.Types.Mixed, required: true, index: true },
-  grnNo: { type: String, required: true },
+  qcNo: { type: String, index: true },
+  poId: { type: Schema.Types.Mixed, index: true },
+  poNo: { type: String },
+  grnId: { type: Schema.Types.Mixed, index: true },
+  grnNo: { type: String },
   inspector: { type: String, required: true },
   date: { type: Date, required: true, default: Date.now },
   status: { 
@@ -526,7 +540,9 @@ export interface IPurchaseInvoice extends Document {
   supplierId: any;
   partyType: 'supplier' | 'farmer';
   poNumber: string;
-  grnNumber: string;
+  qcId?: any;
+  qcNumber?: string;
+  grnNumber?: string;
   dueDate: Date;
   paymentTerms: string;
   supplierGSTIN?: string;
@@ -554,7 +570,7 @@ export interface IPurchaseInvoice extends Document {
 const purchaseInvoiceItemSchema = new Schema<IPurchaseInvoiceItem>({
   item: { type: Schema.Types.Mixed, required: true },
   poQty: { type: Number, required: true },
-  receivedQty: { type: Number, required: true },
+  receivedQty: { type: Number, default: 0 },
   invoiceQty: { type: Number, required: true },
   rate: { type: Number, required: true },
   discount: { type: Number, default: 0 },
@@ -569,7 +585,9 @@ const purchaseInvoiceSchema = new Schema<IPurchaseInvoice>({
   supplierId: { type: Schema.Types.Mixed, required: true },
   partyType: { type: String, enum: ['supplier', 'farmer'], required: true },
   poNumber: { type: String, required: true },
-  grnNumber: { type: String, required: true },
+  qcId: { type: Schema.Types.Mixed, index: true },
+  qcNumber: { type: String },
+  grnNumber: { type: String },
   dueDate: { type: Date, required: true },
   paymentTerms: { type: String, required: true },
   supplierGSTIN: { type: String },

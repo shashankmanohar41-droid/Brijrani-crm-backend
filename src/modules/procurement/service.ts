@@ -148,10 +148,11 @@ export const procurementService = {
       tax: Number(data.tax || 0),
       total: Number(data.total || 0),
       notes: data.notes,
-      status: 'Pending Approval',
+      status: data.status || (createdBy === 'Super Admin' || createdBy === 'Purchase Manager' ? 'Approved' : 'Pending Approval'),
       items,
       approvalHistory: [
-        { step: 'Creation', user: createdBy, action: 'Created', date: new Date(), comment: 'Initial PO generation' }
+        { step: 'Creation', user: createdBy, action: 'Created', date: new Date(), comment: 'Initial PO generation' },
+        ...((data.status === 'Approved' || createdBy === 'Super Admin' || createdBy === 'Purchase Manager') ? [{ step: 'Manager Approval', user: createdBy, action: 'Approved', date: new Date(), comment: 'Directly authorized upon creation' }] : [])
       ],
       warehouseId: toObjectId(data.warehouseId, 'warehouseId'),
       createdBy
@@ -211,99 +212,122 @@ export const procurementService = {
         }
       }
 
-      if (!po) {
-        // GRN submitted without a valid backend PO — save standalone
-        const countQuery = GRN.countDocuments();
-        const grnNo = data.grnNo || `GRN-2026-${String(await (session ? countQuery.session(session) : countQuery) + 1).padStart(5, '0')}`;
-        const grn = new GRN({
-          grnNo,
-          poId: data.poId || 'LOCAL',
-          poNo: data.poNo || 'N/A',
-          date: new Date(data.date || Date.now()),
-          partyType: data.partyType || 'supplier',
-          partyId: data.partyId || 'N/A',
-          vehicleNo: (data.vehicleNo || 'N/A').toUpperCase(),
-          driverName: data.driverName || 'N/A',
-          arrivalDate: new Date(data.arrivalDate || Date.now()),
-          warehouseId: data.warehouseId || 'N/A',
-          challanNo: data.challanNo || '',
-          challanDate: new Date(data.challanDate || Date.now()),
-          transporter: data.transporter || '',
-          remarks: data.remarks || '',
-          qualityStatus: data.qualityStatus || 'Pending',
-          inwardStatus: data.inwardStatus || 'Pending',
-          status: data.status || 'Pending QC',
-          items: (data.items || []).map((i: any) => ({
-            item: toObjectId(i.item, 'item'),
-            orderedQty: i.orderedQty,
-            previouslyReceived: i.previouslyReceived || 0,
-            receivedNow: i.receivedNow,
-            totalReceived: i.totalReceived,
-            pendingQuantity: i.pendingQuantity,
-            acceptedQuantity: i.acceptedQuantity || 0,
-            rejectedQuantity: i.rejectedQuantity || 0,
-            damagedQuantity: i.damagedQuantity || 0,
-            unit: i.unit || 'MT',
-            batchNo: i.batchNo || `BAT-${Date.now().toString().slice(-6)}`,
-            remarks: i.remarks
-          })),
-          createdBy
-        });
-        return await (session ? grn.save({ session }) : grn.save());
-      }
-
       const countQuery = GRN.countDocuments();
       const grnNo = data.grnNo || `GRN-2026-${String(await (session ? countQuery.session(session) : countQuery) + 1).padStart(5, '0')}`;
       
       const items = (data.items || []).map((i: any) => ({
         item: toObjectId(i.item, 'item'),
-        orderedQty: i.orderedQty,
+        orderedQty: i.orderedQty || i.quantity || 0,
         previouslyReceived: i.previouslyReceived || 0,
-        receivedNow: i.receivedNow,
-        totalReceived: i.totalReceived,
-        pendingQuantity: i.pendingQuantity,
-        acceptedQuantity: 0,
-        rejectedQuantity: 0,
-        damagedQuantity: 0,
+        receivedNow: i.receivedNow || i.quantity || 0,
+        totalReceived: i.totalReceived || i.receivedNow || i.quantity || 0,
+        pendingQuantity: i.pendingQuantity || 0,
+        acceptedQuantity: i.acceptedQuantity || i.receivedNow || i.quantity || 0,
+        rejectedQuantity: i.rejectedQuantity || 0,
+        damagedQuantity: i.damagedQuantity || 0,
         unit: i.unit || 'MT',
-        batchNo: `BAT-${po.poNo.slice(-4)}-${Date.now().toString().slice(-3)}`,
+        batchNo: i.batchNo || `BAT-${(po?.poNo || 'PO').slice(-4)}-${Date.now().toString().slice(-3)}`,
         remarks: i.remarks
       }));
 
       const grn = new GRN({
         grnNo,
-        poId: po._id,
-        poNo: po.poNo,
+        poId: po ? po._id : (data.poId || 'LOCAL'),
+        poNo: po ? po.poNo : (data.poNo || 'N/A'),
+        invoiceId: data.invoiceId ? toObjectId(data.invoiceId, 'invoiceId') : undefined,
+        invoiceNo: data.invoiceNo || '',
+        qcId: data.qcId ? toObjectId(data.qcId, 'qcId') : undefined,
+        qcNo: data.qcNo || '',
         date: new Date(data.date || Date.now()),
-        partyType: po.partyType,
-        partyId: po.partyId,
+        partyType: po ? po.partyType : (data.partyType || 'supplier'),
+        partyId: po ? po.partyId : (data.partyId || 'N/A'),
         vehicleNo: (data.vehicleNo || 'N/A').toUpperCase(),
-        driverName: data.driverName,
+        driverName: data.driverName || 'N/A',
         arrivalDate: new Date(data.arrivalDate || Date.now()),
-        warehouseId: po.warehouseId,
-        challanNo: data.challanNo,
+        warehouseId: po ? po.warehouseId : (data.warehouseId || 'N/A'),
+        challanNo: data.challanNo || '',
         challanDate: new Date(data.challanDate || Date.now()),
-        transporter: data.transporter,
-        remarks: data.remarks,
-        qualityStatus: 'Pending',
-        inwardStatus: 'Pending',
-        status: 'Pending QC',
+        transporter: data.transporter || '',
+        remarks: data.remarks || '',
+        qualityStatus: data.qualityStatus || (data.qcNo ? 'Passed' : 'Pending'),
+        inwardStatus: 'Completed',
+        status: data.status || 'Accepted',
         items,
         createdBy
       });
 
       await (session ? grn.save({ session }) : grn.save());
 
-      po.status = 'Partially Received';
-      await (session ? po.save({ session }) : po.save());
+      // If linked with a Purchase Invoice, update the invoice's grnNumber
+      if (data.invoiceId || data.invoiceNo) {
+        const invQuery = PurchaseInvoice.findOne({
+          $or: [
+            ...(data.invoiceId && mongoose.Types.ObjectId.isValid(data.invoiceId) ? [{ _id: data.invoiceId }] : []),
+            ...(data.invoiceNo ? [{ invoiceNo: data.invoiceNo }] : [])
+          ]
+        });
+        const inv = await (session ? invQuery.session(session) : invQuery);
+        if (inv) {
+          inv.grnNumber = grn.grnNo;
+          await (session ? inv.save({ session }) : inv.save());
+        }
+      } else if (po?.poNo) {
+        const invQuery = PurchaseInvoice.findOne({
+          poNumber: po.poNo,
+          $or: [{ grnNumber: '' }, { grnNumber: { $exists: false } }, { grnNumber: null }]
+        });
+        const inv = await (session ? invQuery.session(session) : invQuery);
+        if (inv) {
+          inv.grnNumber = grn.grnNo;
+          await (session ? inv.save({ session }) : inv.save());
+        }
+      }
+
+      // Inward Stock Ledgers for accepted items
+      for (const grnItem of grn.items) {
+        const poItem = po?.items?.find((i: any) => String(i.item) === String(grnItem.item));
+        const unitRate = poItem ? poItem.rate : 20000;
+
+        if (grnItem.acceptedQuantity > 0) {
+          await inventoryService.createStockLedgerEntry(session, {
+            commodityId: String(grnItem.item),
+            batchNo: grnItem.batchNo,
+            warehouseId: String(grn.warehouseId),
+            binId: 'N/A',
+            referenceType: 'QUALITY_ACCEPTANCE',
+            referenceId: grn.grnNo,
+            quantityIn: grnItem.acceptedQuantity,
+            quantityOut: 0,
+            unitCost: unitRate,
+            createdBy
+          });
+        }
+      }
+
+      if (po) {
+        po.status = 'Received';
+        await (session ? po.save({ session }) : po.save());
+      }
 
       return grn;
     });
   },
 
-  // --- QUALITY INSPECTION & STOCK INWARD ---
+  // --- QUALITY INSPECTION & PRE-INWARD LOT AUDIT ---
   submitQualityInspection: async (data: any, createdBy: string) => {
     return await runInTransaction(async (session) => {
+      // Find PO if referenced
+      let po: any = null;
+      if (data.poId && mongoose.Types.ObjectId.isValid(data.poId)) {
+        const poQuery = PurchaseOrder.findById(data.poId);
+        po = await (session ? poQuery.session(session) : poQuery);
+      }
+      if (!po && data.poNo) {
+        const poQuery = PurchaseOrder.findOne({ poNo: data.poNo });
+        po = await (session ? poQuery.session(session) : poQuery);
+      }
+
+      // Find GRN if referenced
       let grn: any = null;
       if (data.grnId && mongoose.Types.ObjectId.isValid(data.grnId)) {
         const grnQuery = GRN.findById(data.grnId);
@@ -313,21 +337,12 @@ export const procurementService = {
         const grnQuery = GRN.findOne({ grnNo: data.grnNo });
         grn = await (session ? grnQuery.session(session) : grnQuery);
       }
-      if (!grn && data.grnId) {
-        const grnQuery = GRN.findOne({ $or: [{ grnNo: data.grnId }, { poNo: data.grnId }] });
-        grn = await (session ? grnQuery.session(session) : grnQuery);
-      }
-      if (!grn) {
-        const grnQuery = GRN.findOne({}).sort({ createdAt: -1 });
-        grn = await (session ? grnQuery.session(session) : grnQuery);
-      }
-      if (!grn) throw new CustomError('GRN not found', 404);
 
       // Determine QC Number
       const dateStr = new Date().getFullYear().toString();
       const count = await QualityInspection.countDocuments();
       const padCount = String(count + 1).padStart(5, '0');
-      const qcNo = `QC-${dateStr}-${padCount}`;
+      const qcNo = data.qcNo || `QC-${dateStr}-${padCount}`;
 
       // Perform automatic parameter evaluation against Admin Quality Specifications
       const itemsPayload: any[] = [];
@@ -339,7 +354,6 @@ export const procurementService = {
         const itemId = toObjectId(reqItem.item, 'item');
         let specs = await QualitySpecification.find({ commodityId: itemId });
         
-        // Also check if commodity was referenced by string ID or code
         if (!specs || specs.length === 0) {
           const comm = await Commodity.findOne({ $or: [{ _id: mongoose.Types.ObjectId.isValid(reqItem.item) ? reqItem.item : undefined }, { commodityCode: reqItem.item }, { name: reqItem.item }] });
           if (comm) {
@@ -350,15 +364,12 @@ export const procurementService = {
         const testedParameters = [];
         let itemScore = 100;
 
-        // If specs exist, run evaluation
         if (specs && specs.length > 0) {
           for (const spec of specs) {
-            // Find tested value matching parameterName
             const actualValObj = (reqItem.testedParameters || []).find((tp: any) => tp.parameterName === spec.parameterName) || { actualValue: reqItem[spec.parameterName] || 0 };
             const actualValue = actualValObj.actualValue;
             let status: 'PASS' | 'FAIL' | 'WARN' = 'PASS';
 
-            // Check against limits set by Admin
             if (spec.limitType === '<=') {
               if (Number(actualValue) > (spec.maxLimit || 0)) {
                 status = spec.isOptional ? 'WARN' : 'FAIL';
@@ -402,7 +413,6 @@ export const procurementService = {
             });
           }
         } else {
-          // Default baseline evaluation fallback (Moisture <= 12.5%, Foreign Material <= 2.0%)
           const moisture = Number(reqItem.moisturePercent || reqItem.actualMoisture || 0);
           if (moisture > 12.5) {
             allPassed = false;
@@ -444,21 +454,18 @@ export const procurementService = {
         });
       }
 
-      // STRICT ADMIN QC POLICY: If any mandatory parameter failed, block ACCEPT / Partial Accept
       const requestedDecision = data.decision || (allPassed ? 'ACCEPT' : 'REJECT');
-      const totalLotQty = data.receivedQuantity || grn.items.reduce((sum: number, item: any) => sum + item.receivedNow, 0);
+      const totalLotQty = data.receivedQuantity || (grn ? grn.items.reduce((sum: number, item: any) => sum + item.receivedNow, 0) : (po ? po.items.reduce((sum: number, item: any) => sum + item.quantity, 0) : 0));
 
       if (failedBreaches.length > 0 && (requestedDecision === 'ACCEPT' || Number(data.acceptedQuantity) > 0)) {
         const breachDetails = failedBreaches.map(b => `"${b.parameterName}" (${b.actualValue}) exceeds Admin limit of ${b.allowedLimit}`).join(', ');
         throw new CustomError(`Quality Policy Violation: Order cannot be Accepted because parameter(s) breach Admin limits: ${breachDetails}. This order must be Rejected.`, 400);
       }
 
-      // Calculate final prices and adjustments
-      const basePrice = data.basePrice || 2500;
+      const basePrice = data.basePrice || (po ? po.items[0]?.rate : 2500) || 2500;
       const priceDeduction = data.priceDeduction || 0;
       const finalPrice = Math.max(0, basePrice - priceDeduction);
 
-      // Decision split logic: If failed, force REJECT or HOLD
       let decision: 'ACCEPT' | 'PARTIAL ACCEPT' | 'REJECT' | 'HOLD' = requestedDecision;
       if (failedBreaches.length > 0) {
         decision = (requestedDecision === 'HOLD') ? 'HOLD' : 'REJECT';
@@ -467,12 +474,14 @@ export const procurementService = {
       const acceptedQuantity = (decision === 'ACCEPT' || decision === 'PARTIAL ACCEPT') ? (data.acceptedQuantity || (decision === 'ACCEPT' ? totalLotQty : 0)) : 0;
       const rejectedQuantity = decision === 'REJECT' ? totalLotQty : (data.rejectedQuantity || 0);
       const holdQuantity = decision === 'HOLD' ? totalLotQty : (data.holdQuantity || 0);
-
       const grade = data.grade || (allPassed ? 'Grade A' : 'Rejected');
 
       const qi = new QualityInspection({
-        grnId: grn._id,
-        grnNo: grn.grnNo,
+        qcNo,
+        poId: po ? po._id : (data.poId ? toObjectId(data.poId, 'poId') : undefined),
+        poNo: po ? po.poNo : data.poNo,
+        grnId: grn ? grn._id : (data.grnId ? toObjectId(data.grnId, 'grnId') : undefined),
+        grnNo: grn ? grn.grnNo : data.grnNo,
         inspector: createdBy,
         date: new Date(),
         status: decision === 'REJECT' ? 'Rejected' : decision === 'HOLD' ? 'On Hold' : 'Approved',
@@ -502,91 +511,12 @@ export const procurementService = {
       });
       await (session ? qi.save({ session }) : qi.save());
 
-      // Update GRN item details based on decision quantities
-      grn.items.forEach((grnItem: any) => {
-        const qiItem = itemsPayload.find(i => String(i.item) === String(grnItem.item));
-        if (qiItem) {
-          grnItem.acceptedQuantity = data.acceptedQuantity || (decision === 'ACCEPT' ? grnItem.receivedNow : 0);
-          grnItem.rejectedQuantity = data.rejectedQuantity || (decision === 'REJECT' ? grnItem.receivedNow : 0);
-          grnItem.damagedQuantity = data.damagedQuantity || 0;
-          grnItem.pendingQuantity = Math.max(0, grnItem.orderedQty - grnItem.previouslyReceived - grnItem.acceptedQuantity);
-          grnItem.totalReceived = grnItem.previouslyReceived + grnItem.acceptedQuantity;
-        }
-      });
-
-      // Update overall GRN QC statuses
-      grn.qualityStatus = decision === 'ACCEPT' ? 'Passed' : decision === 'REJECT' ? 'Rejected' : decision === 'PARTIAL ACCEPT' ? 'Partially Passed' : 'On Hold';
-      grn.status = decision === 'ACCEPT' || decision === 'PARTIAL ACCEPT' ? 'Accepted' : decision === 'REJECT' ? 'Rejected' : 'Pending QC';
-      await (session ? grn.save({ session }) : grn.save());
-
-      // Update Purchase Order status
-      let po: any = null;
-      if (grn.poId && mongoose.Types.ObjectId.isValid(grn.poId)) {
-        const poQuery = PurchaseOrder.findById(grn.poId);
-        po = await (session ? poQuery.session(session) : poQuery);
-      }
-      if (!po && grn.poNo) {
-        const poQuery = PurchaseOrder.findOne({ poNo: grn.poNo });
-        po = await (session ? poQuery.session(session) : poQuery);
-      }
-
-      // Create Stock Ledgers depending on decision outcomes (GOOD stock vs HOLD/REJECTED stock locations)
-      for (const grnItem of grn.items) {
-        const poItem = po?.items?.find((i: any) => String(i.item) === String(grnItem.item));
-        const unitRate = finalPrice || (poItem ? poItem.rate : 20000);
-
-        // Good stock bin allocation
-        if (grnItem.acceptedQuantity > 0) {
-          await inventoryService.createStockLedgerEntry(session, {
-            commodityId: String(grnItem.item),
-            batchNo: grnItem.batchNo,
-            warehouseId: String(grn.warehouseId),
-            binId: 'N/A', // Auto-allocated
-            referenceType: 'QUALITY_ACCEPTANCE',
-            referenceId: grn.grnNo,
-            quantityIn: grnItem.acceptedQuantity,
-            quantityOut: 0,
-            unitCost: unitRate,
-            createdBy
-          });
-        }
-
-        // Rejected stock bin allocation
-        if (grnItem.rejectedQuantity > 0) {
-          await inventoryService.createStockLedgerEntry(session, {
-            commodityId: String(grnItem.item),
-            batchNo: grnItem.batchNo,
-            warehouseId: String(grn.warehouseId),
-            binId: 'N/A', // Resolved dynamically in target warehouse
-            referenceType: 'DAMAGE',
-            referenceId: grn.grnNo,
-            quantityIn: grnItem.rejectedQuantity,
-            quantityOut: 0,
-            unitCost: unitRate,
-            createdBy
-          });
-        }
-      }
-
-      grn.inwardStatus = 'Completed';
-      await (session ? grn.save({ session }) : grn.save());
-
-      if (po) {
-        let allCompleted = true;
-        for (const poItem of po.items) {
-          const grnsForPo = await GRN.find({ poId: po._id, inwardStatus: 'Completed' });
-          let totalAccepted = 0;
-          grnsForPo.forEach(g => {
-            const git = g.items.find(gi => String(gi.item) === String(poItem.item));
-            if (git) totalAccepted += git.acceptedQuantity;
-          });
-
-          if (totalAccepted < poItem.quantity) {
-            allCompleted = false;
-          }
-        }
-        po.status = allCompleted ? 'Received' : 'Partially Received';
-        await (session ? po.save({ session }) : po.save());
+      if (grn) {
+        grn.qualityStatus = decision === 'ACCEPT' ? 'Passed' : decision === 'REJECT' ? 'Rejected' : decision === 'PARTIAL ACCEPT' ? 'Partially Passed' : 'On Hold';
+        grn.status = decision === 'ACCEPT' || decision === 'PARTIAL ACCEPT' ? 'Accepted' : decision === 'REJECT' ? 'Rejected' : 'Pending QC';
+        grn.qcId = qi._id;
+        grn.qcNo = qi.qcNo;
+        await (session ? grn.save({ session }) : grn.save());
       }
 
       return qi;
@@ -600,14 +530,16 @@ export const procurementService = {
     const date = new Date(data.invoiceDate || Date.now());
     const dueDate = data.dueDate && !isNaN(new Date(data.dueDate).getTime()) ? new Date(data.dueDate) : new Date(date.getTime() + 86400000 * 30);
     const poNumber = data.poNumber || data.poNo || 'PO-2026';
-    const grnNumber = data.grnNumber || data.grnNo || 'GRN-2026';
+    const qcNumber = data.qcNumber || data.qcNo || '';
+    const qcId = data.qcId ? toObjectId(data.qcId, 'qcId') : undefined;
+    const grnNumber = data.grnNumber || data.grnNo || '';
     const paymentTerms = data.paymentTerms || '30 Days Net';
 
     const items = (data.items || []).map((i: any) => ({
       item: toObjectId(i.item, 'item'),
       poQty: i.poQty || i.quantity || 0,
-      receivedQty: i.receivedQty || i.invoiceQty || 0,
-      invoiceQty: i.invoiceQty || i.quantity || 0,
+      receivedQty: i.receivedQty || i.acceptedQuantity || i.invoiceQty || 0,
+      invoiceQty: i.invoiceQty || i.acceptedQuantity || i.quantity || 0,
       rate: i.rate || 0,
       discount: i.discount || 0,
       taxPercent: i.taxPercent !== undefined ? Number(i.taxPercent) : 0,
@@ -621,6 +553,8 @@ export const procurementService = {
       supplierId: toObjectId(data.supplierId, 'supplierId'),
       partyType: data.partyType || 'supplier',
       poNumber,
+      qcId,
+      qcNumber,
       grnNumber,
       dueDate,
       paymentTerms,
