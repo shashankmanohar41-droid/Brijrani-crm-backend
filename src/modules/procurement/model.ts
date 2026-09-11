@@ -528,6 +528,10 @@ export interface IPurchaseInvoiceItem {
   receivedQty: number;
   invoiceQty: number;
   rate: number;
+  baseRate?: number;
+  qualityRebatePerUnit?: number;
+  qualityRebateTotal?: number;
+  settledRate?: number;
   discount: number;
   taxPercent: number;
   taxAmount: number;
@@ -550,6 +554,8 @@ export interface IPurchaseInvoice extends Document {
   shippingAddress?: string;
   taxType: string;
   subtotal: number;
+  baseSubtotal?: number;
+  qualityRebateDeduction?: number;
   discount: number;
   cgst: number;
   sgst: number;
@@ -573,6 +579,10 @@ const purchaseInvoiceItemSchema = new Schema<IPurchaseInvoiceItem>({
   receivedQty: { type: Number, default: 0 },
   invoiceQty: { type: Number, required: true },
   rate: { type: Number, required: true },
+  baseRate: { type: Number },
+  qualityRebatePerUnit: { type: Number, default: 0 },
+  qualityRebateTotal: { type: Number, default: 0 },
+  settledRate: { type: Number },
   discount: { type: Number, default: 0 },
   taxPercent: { type: Number, default: 0 },
   taxAmount: { type: Number, required: true },
@@ -595,6 +605,8 @@ const purchaseInvoiceSchema = new Schema<IPurchaseInvoice>({
   shippingAddress: { type: String },
   taxType: { type: String, default: 'GST' },
   subtotal: { type: Number, required: true },
+  baseSubtotal: { type: Number },
+  qualityRebateDeduction: { type: Number, default: 0 },
   discount: { type: Number, default: 0 },
   cgst: { type: Number, default: 0 },
   sgst: { type: Number, default: 0 },

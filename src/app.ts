@@ -26,6 +26,7 @@ import inventoryRoutes from './modules/inventory/route';
 import crmRoutes from './modules/crm/route';
 import financeRoutes from './modules/finance/route';
 import reportRoutes from './modules/reports/route';
+import qualityRoutes, { qualityControlRouter, qualityRebateRulesRouter, qualityParametersRouter } from './modules/quality/route';
 
 const app = express();
 
@@ -85,6 +86,15 @@ app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/crm', crmRoutes);
 app.use('/api/v1/finance', financeRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/quality', qualityRoutes);
+
+// Quality Control & Rebate Master Direct Endpoints (Section 22)
+app.use('/api/quality-control', qualityControlRouter);
+app.use('/api/quality-rebate-rules', qualityRebateRulesRouter);
+app.use('/api/quality-parameters', qualityParametersRouter);
+app.use('/api/v1/quality-control', qualityControlRouter);
+app.use('/api/v1/quality-rebate-rules', qualityRebateRulesRouter);
+app.use('/api/v1/quality-parameters', qualityParametersRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {
