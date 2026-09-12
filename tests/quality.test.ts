@@ -599,7 +599,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
 
   // TEST 15B: Duplicate QC Prevention for same Purchase Order
   test('15B. Should prevent duplicate QC creation for the same Purchase Order', async () => {
-    const uniquePo = 'PO-TEST-UNIQUE-DUP-999';
+    const uniquePo = `PO-TEST-UNIQUE-DUP-${Date.now()}`;
     await qualityService.createQC({
       poNumber: uniquePo,
       partyType: 'farmer',
@@ -631,7 +631,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
   // TEST 15C: Unapproved Purchase Order QC Rejection
   test('15C. Should reject QC creation if Purchase Order is not in Approved status', async () => {
     const draftPo = await new PurchaseOrder({
-      poNo: 'PO-TEST-DRAFT-999',
+      poNo: `PO-TEST-DRAFT-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       date: new Date(),
       partyType: 'supplier',
       partyId: supplierId,
