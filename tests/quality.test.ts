@@ -5,6 +5,7 @@ import { QualityParameter, QualityRebateRule, QualityControl } from '../src/modu
 import { Commodity } from '../src/modules/commodities/model';
 import { Supplier } from '../src/modules/suppliers/model';
 import { Farmer } from '../src/modules/farmers/model';
+import { PurchaseOrder } from '../src/modules/procurement/model';
 
 const TEST_MONGO_URI = process.env.MONGODB_URI_TEST || 'mongodb+srv://shashankmanohar1734_db_user:hpIe3ev8T1QsKZMM@cluster0.ws2kdbz.mongodb.net/brijrani_erp_test?retryWrites=true&w=majority';
 
@@ -625,6 +626,54 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
       rebateType: 'Standard Rebate',
       qualityParameters: [{ parameterName: 'Moisture', actualValue: 15 }]
     }, 'qc-user')).rejects.toThrow(/already exists for Purchase Order/i);
+  });
+
+  // TEST 15C: Unapproved Purchase Order QC Rejection
+  test('15C. Should reject QC creation if Purchase Order is not in Approved status', async () => {
+    const draftPo = await new PurchaseOrder({
+      poNo: 'PO-TEST-DRAFT-999',
+      date: new Date(),
+      partyType: 'supplier',
+      partyId: supplierId,
+      expectedDelivery: new Date(),
+      paymentTerms: '30 Days',
+      currency: 'INR',
+      buyer: 'Buyer 1',
+      department: 'Procurement',
+      warehouseId: new mongoose.Types.ObjectId(),
+      createdBy: 'test-user',
+      freight: 0,
+      otherCharges: 0,
+      discount: 0,
+      tax: 0,
+      total: 250000,
+      status: 'Draft',
+      items: [{
+        item: maizeId,
+        description: 'Maize',
+        quantity: 10,
+        unit: 'MT',
+        rate: 25000,
+        discount: 0,
+        taxPercent: 5,
+        taxAmount: 12500,
+        amount: 250000,
+        expectedDelivery: new Date()
+      }]
+    }).save();
+
+    await expect(qualityService.createQC({
+      poNumber: draftPo.poNo,
+      partyType: 'supplier',
+      partyId: supplierId,
+      commodityId: maizeId,
+      vehicleNumber: 'BR-DRAFT-PO',
+      quantity: 10,
+      baseRate: 25000,
+      calculationMethod: 'Pro-Rata',
+      rebateType: 'Standard Rebate',
+      qualityParameters: [{ parameterName: 'Moisture', actualValue: 14 }]
+    }, 'qc-user')).rejects.toThrow(/Only Approved Purchase Orders can undergo Quality Control inspection/i);
   });
 
   // TEST 16: Duplicate Parameter Code Prevention

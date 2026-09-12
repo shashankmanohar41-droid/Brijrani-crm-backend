@@ -3,6 +3,7 @@ import { calculateQualityRebate, CalculationInput } from './calculationEngine';
 import { Commodity } from '../commodities/model';
 import { Supplier } from '../suppliers/model';
 import { Farmer } from '../farmers/model';
+import { PurchaseOrder } from '../procurement/model';
 import { CustomError } from '../../middlewares/errorHandler';
 import mongoose from 'mongoose';
 
@@ -313,6 +314,28 @@ export const qualityService = {
     }
     if (data.baseRate === undefined || Number(data.baseRate) < 0) {
       throw new CustomError('Purchase/Base Rate cannot be negative', 400);
+    }
+
+    // Verify Purchase Order status (Only Approved POs can undergo QC)
+    const poLookup: any[] = [];
+    if (data.poId && mongoose.Types.ObjectId.isValid(String(data.poId))) {
+      poLookup.push({ _id: data.poId });
+    }
+    if (data.poNumber) {
+      poLookup.push({ poNo: data.poNumber });
+    }
+    if (data.referenceNumber) {
+      poLookup.push({ poNo: data.referenceNumber });
+    }
+
+    if (poLookup.length > 0) {
+      const dbPo = await PurchaseOrder.findOne({ $or: poLookup });
+      if (dbPo) {
+        const allowedStatuses = ['Approved', 'Sent', 'Partially Received', 'Received'];
+        if (!allowedStatuses.includes(dbPo.status)) {
+          throw new CustomError(`Purchase Order '${dbPo.poNo}' is currently in '${dbPo.status}' status. Only Approved Purchase Orders can undergo Quality Control inspection.`, 400);
+        }
+      }
     }
 
     // Check for existing QC linked to this Purchase Order (excluding Rejected)
