@@ -28,7 +28,7 @@ export const qualityController = {
 
   getParameterById: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const param = await qualityService.getParameterById(req.params.id);
+      const param = await qualityService.getParameterById(req.params.id as string);
       sendSuccess(res, 'Quality parameter retrieved successfully', param);
     } catch (err) {
       next(err);
@@ -38,7 +38,7 @@ export const qualityController = {
   updateParameter: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user?.id || 'Admin';
-      const param = await qualityService.updateParameter(req.params.id, req.body, user);
+      const param = await qualityService.updateParameter(req.params.id as string, req.body, user);
       sendSuccess(res, 'Quality parameter updated successfully', param);
     } catch (err) {
       next(err);
@@ -47,7 +47,7 @@ export const qualityController = {
 
   deleteParameter: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await qualityService.deleteParameter(req.params.id);
+      const result = await qualityService.deleteParameter(req.params.id as string);
       sendSuccess(res, 'Quality parameter deleted successfully', result);
     } catch (err) {
       next(err);
@@ -78,7 +78,7 @@ export const qualityController = {
 
   getRuleById: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const rule = await qualityService.getRuleById(req.params.id);
+      const rule = await qualityService.getRuleById(req.params.id as string);
       sendSuccess(res, 'Quality rebate rule retrieved successfully', rule);
     } catch (err) {
       next(err);
@@ -88,7 +88,7 @@ export const qualityController = {
   updateRule: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user?.id || 'Admin';
-      const rule = await qualityService.updateRule(req.params.id, req.body, user);
+      const rule = await qualityService.updateRule(req.params.id as string, req.body, user);
       sendSuccess(res, 'Quality rebate rule updated successfully', rule);
     } catch (err) {
       next(err);
@@ -97,7 +97,7 @@ export const qualityController = {
 
   deleteRule: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await qualityService.deleteRule(req.params.id);
+      const result = await qualityService.deleteRule(req.params.id as string);
       sendSuccess(res, 'Quality rebate rule deleted successfully', result);
     } catch (err) {
       next(err);
@@ -107,7 +107,7 @@ export const qualityController = {
   duplicateRule: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user?.id || 'Admin';
-      const duplicated = await qualityService.duplicateRule(req.params.id, user);
+      const duplicated = await qualityService.duplicateRule(req.params.id as string, user);
       sendSuccess(res, 'Quality rebate rule duplicated successfully', duplicated, 201);
     } catch (err) {
       next(err);
@@ -116,7 +116,7 @@ export const qualityController = {
 
   toggleRuleStatus: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const updated = await qualityService.toggleRuleStatus(req.params.id);
+      const updated = await qualityService.toggleRuleStatus(req.params.id as string);
       sendSuccess(res, `Rule status toggled to ${updated.status}`, updated);
     } catch (err) {
       next(err);
@@ -159,7 +159,7 @@ export const qualityController = {
 
   getQCById: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const qc = await qualityService.getQCById(req.params.id);
+      const qc = await qualityService.getQCById(req.params.id as string);
       sendSuccess(res, 'Quality control record retrieved successfully', qc);
     } catch (err) {
       next(err);
@@ -169,7 +169,7 @@ export const qualityController = {
   updateQC: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user?.id || 'Admin';
-      const updated = await qualityService.updateQC(req.params.id, req.body, user);
+      const updated = await qualityService.updateQC(req.params.id as string, req.body, user);
       sendSuccess(res, 'Quality control record updated successfully', updated);
     } catch (err) {
       next(err);
@@ -179,7 +179,7 @@ export const qualityController = {
   submitQC: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user?.id || 'Admin';
-      const submitted = await qualityService.submitQC(req.params.id, user);
+      const submitted = await qualityService.submitQC(req.params.id as string, user);
       sendSuccess(res, 'Quality control record submitted for approval', submitted);
     } catch (err) {
       next(err);
@@ -189,7 +189,7 @@ export const qualityController = {
   approveQC: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user?.id || 'Admin';
-      const approved = await qualityService.approveQC(req.params.id, user);
+      const approved = await qualityService.approveQC(req.params.id as string, user);
       sendSuccess(res, 'Quality control record approved and finalized', approved);
     } catch (err) {
       next(err);
@@ -199,7 +199,7 @@ export const qualityController = {
   rejectQC: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user?.id || 'Admin';
-      const rejected = await qualityService.rejectQC(req.params.id, req.body.reason, user);
+      const rejected = await qualityService.rejectQC(req.params.id as string, req.body.reason, user);
       sendSuccess(res, 'Quality control record rejected', rejected);
     } catch (err) {
       next(err);
@@ -209,7 +209,7 @@ export const qualityController = {
   deleteQC: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const user = req.user?.id || 'Admin';
-      const result = await qualityService.deleteQC(req.params.id, user);
+      const result = await qualityService.deleteQC(req.params.id as string, user);
       sendSuccess(res, 'Quality control record deleted', result);
     } catch (err) {
       next(err);
