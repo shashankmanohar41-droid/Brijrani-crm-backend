@@ -297,6 +297,11 @@ export const qualityService = {
   // ==========================================
   createQC: async (data: any, user: string = 'Admin') => {
     // Validations
+    const poRef = data.poNumber || data.referenceNumber || data.poId;
+    if (!poRef) {
+      throw new CustomError('Purchase Order linkage is mandatory for Quality Control assessment', 400);
+    }
+
     if (!data.partyId || !data.partyType) {
       throw new CustomError('Supplier/Farmer party selection is required', 400);
     }
@@ -308,6 +313,27 @@ export const qualityService = {
     }
     if (data.baseRate === undefined || Number(data.baseRate) < 0) {
       throw new CustomError('Purchase/Base Rate cannot be negative', 400);
+    }
+
+    // Check for existing QC linked to this Purchase Order (excluding Rejected)
+    const poConditions: any[] = [];
+    if (data.poId) poConditions.push({ poId: data.poId });
+    if (data.poNumber) {
+      poConditions.push({ poNumber: data.poNumber });
+      poConditions.push({ referenceNumber: data.poNumber });
+    }
+    if (data.referenceNumber) {
+      poConditions.push({ referenceNumber: data.referenceNumber });
+      poConditions.push({ poNumber: data.referenceNumber });
+    }
+    if (poConditions.length > 0) {
+      const existingQc = await QualityControl.findOne({
+        $or: poConditions,
+        status: { $ne: 'Rejected' }
+      });
+      if (existingQc) {
+        throw new CustomError(`Quality Control assessment (${existingQc.qcNumber}) already exists for Purchase Order '${poRef}'. Cannot create duplicate QC for the same PO.`, 400);
+      }
     }
 
     // Auto-generate QC number if not provided
@@ -402,9 +428,9 @@ export const qualityService = {
       unit: data.unit || 'MT',
       baseRate: Number(data.baseRate),
       date: txDate,
-      referenceNumber: data.referenceNumber,
+      referenceNumber: data.referenceNumber || data.poNumber,
       poId: data.poId,
-      poNumber: data.poNumber,
+      poNumber: data.poNumber || data.referenceNumber,
       grnId: data.grnId,
       grnNumber: data.grnNumber,
       rebateType: data.rebateType || 'Standard Rebate',

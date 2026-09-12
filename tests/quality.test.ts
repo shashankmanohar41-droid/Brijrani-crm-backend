@@ -341,6 +341,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
     });
 
     const qcMaize = await qualityService.createQC({
+      poNumber: 'PO-TEST-008A',
       partyType: 'farmer',
       partyId: farmerId,
       commodityId: maizeId,
@@ -353,6 +354,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
     }, 'test-user');
 
     const qcWheat = await qualityService.createQC({
+      poNumber: 'PO-TEST-008B',
       partyType: 'farmer',
       partyId: farmerId,
       commodityId: wheatId,
@@ -417,6 +419,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
   // TEST 10: Draft QC Creation & Initial State
   test('10. Should create a QC in Draft status with complete calculation and initial audit trail', async () => {
     const qc = await qualityService.createQC({
+      poNumber: 'PO-TEST-010',
       partyType: 'supplier',
       partyId: supplierId,
       commodityId: maizeId,
@@ -440,6 +443,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
   // TEST 11: QC Approval Lifecycle
   test('11. Should transition QC through Submit and Approve workflow', async () => {
     const qc = await qualityService.createQC({
+      poNumber: 'PO-TEST-011',
       partyType: 'farmer',
       partyId: farmerId,
       commodityId: maizeId,
@@ -466,6 +470,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
   // TEST 12: QC Rejection
   test('12. Should reject QC with mandatory rejection reason', async () => {
     const qc = await qualityService.createQC({
+      poNumber: 'PO-TEST-012',
       partyType: 'supplier',
       partyId: supplierId,
       commodityId: maizeId,
@@ -490,6 +495,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
   // TEST 13: Editing Rules & Audit Trail on Approved QC
   test('13. Should enforce authorization reason and record audit diff when editing Approved QC', async () => {
     const qc = await qualityService.createQC({
+      poNumber: 'PO-TEST-013',
       partyType: 'farmer',
       partyId: farmerId,
       commodityId: maizeId,
@@ -523,6 +529,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
   test('14. Historical QC calculation should remain immutable even if Master Rule is updated later', async () => {
     // 1. Create QC with current rule
     const qc = await qualityService.createQC({
+      poNumber: 'PO-TEST-014',
       partyType: 'farmer',
       partyId: farmerId,
       commodityId: maizeId,
@@ -550,8 +557,21 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
 
   // TEST 15: Invalid Quality Values Validation
   test('15. Should reject invalid/negative inputs for quantity and rate', async () => {
+    // Missing PO
+    await expect(qualityService.createQC({
+      partyType: 'supplier',
+      partyId: supplierId,
+      commodityId: maizeId,
+      vehicleNumber: 'BR-NO-PO',
+      quantity: 10,
+      baseRate: 25000,
+      calculationMethod: 'Pro-Rata',
+      rebateType: 'Standard Rebate'
+    })).rejects.toThrow(/Purchase Order linkage is mandatory/i);
+
     // Negative quantity
     await expect(qualityService.createQC({
+      poNumber: 'PO-TEST-INVALID-1',
       partyType: 'supplier',
       partyId: supplierId,
       commodityId: maizeId,
@@ -564,6 +584,7 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
 
     // Negative base rate
     await expect(qualityService.createQC({
+      poNumber: 'PO-TEST-INVALID-2',
       partyType: 'supplier',
       partyId: supplierId,
       commodityId: maizeId,
@@ -573,6 +594,37 @@ describe('Quality Control & Rebate Master Module Test Suite', () => {
       calculationMethod: 'Pro-Rata',
       rebateType: 'Standard Rebate'
     })).rejects.toThrow();
+  });
+
+  // TEST 15B: Duplicate QC Prevention for same Purchase Order
+  test('15B. Should prevent duplicate QC creation for the same Purchase Order', async () => {
+    const uniquePo = 'PO-TEST-UNIQUE-DUP-999';
+    await qualityService.createQC({
+      poNumber: uniquePo,
+      partyType: 'farmer',
+      partyId: farmerId,
+      commodityId: maizeId,
+      vehicleNumber: 'BR-DUP-1',
+      quantity: 50,
+      baseRate: 25000,
+      calculationMethod: 'Pro-Rata',
+      rebateType: 'Standard Rebate',
+      qualityParameters: [{ parameterName: 'Moisture', actualValue: 14 }]
+    }, 'qc-user');
+
+    // Attempting another QC on the exact same PO should fail
+    await expect(qualityService.createQC({
+      poNumber: uniquePo,
+      partyType: 'farmer',
+      partyId: farmerId,
+      commodityId: maizeId,
+      vehicleNumber: 'BR-DUP-2',
+      quantity: 50,
+      baseRate: 25000,
+      calculationMethod: 'Pro-Rata',
+      rebateType: 'Standard Rebate',
+      qualityParameters: [{ parameterName: 'Moisture', actualValue: 15 }]
+    }, 'qc-user')).rejects.toThrow(/already exists for Purchase Order/i);
   });
 
   // TEST 16: Duplicate Parameter Code Prevention
