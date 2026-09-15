@@ -10,9 +10,6 @@ import { connectDB } from './config/db';
 // Load Env variables
 dotenv.config();
 
-// Initialize Database Connection
-connectDB();
-
 // Middlewares
 import { errorHandler } from './middlewares/errorHandler';
 import { idempotency } from './middlewares/idempotency';
