@@ -96,6 +96,16 @@ app.use('/uploads', (req, res, next) => {
   }
 }));
 
+// Serverless DB connection assurance
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('DB connection assurance error:', err);
+  }
+  next();
+});
+
 // 2. Base Modular Routing (Section 63)
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/masters', masterRoutes);
