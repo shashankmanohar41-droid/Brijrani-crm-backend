@@ -76,7 +76,7 @@ app.use('/api/', limiter);
 app.use(idempotency as any);
 
 // Serve static upload backups with permissive CORS
-const uploadStaticDir = path.join(__dirname, '../uploads');
+const uploadStaticDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, '../uploads');
 app.use('/uploads', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');

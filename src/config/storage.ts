@@ -13,10 +13,14 @@ cloudinary.config({
 
 export { cloudinary };
 
-// Local storage backup directory
-const uploadDir = path.join(__dirname, '../../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Local storage backup directory (use /tmp on Vercel)
+const uploadDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, '../../uploads');
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Could not initialize local upload directory:', e);
 }
 
 const storage = multer.diskStorage({
