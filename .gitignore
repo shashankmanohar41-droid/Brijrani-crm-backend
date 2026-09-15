@@ -22,3 +22,7 @@ logs/
 
 # Testing
 coverage/
+
+# Uploads
+uploads/
+

@@ -2,6 +2,8 @@ import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../../middlewares/auth';
 import { procurementService } from './service';
 import { sendSuccess } from '../../utils/response';
+import { uploadToCloudinary, uploadToCloud } from '../../config/storage';
+import { CustomError } from '../../middlewares/errorHandler';
 
 export const procurementController = {
   createEnquiry: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -400,6 +402,51 @@ export const procurementController = {
     try {
       const data = await procurementService.deleteQualityInspection(req.params.id as string);
       sendSuccess(res, 'Quality Inspection deleted successfully', data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  uploadPhoto: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // 1. If file uploaded via multipart multer
+      if (req.file) {
+        const url = await uploadToCloud(req.file, 'brijrani_erp/grn_photos');
+        sendSuccess(res, 'Photo uploaded successfully to Cloudinary', { url, secure_url: url }, 201);
+        return;
+      }
+
+      // 2. If multiple files uploaded via multer
+      if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+        const urls: string[] = [];
+        for (const file of req.files) {
+          const url = await uploadToCloud(file, 'brijrani_erp/grn_photos');
+          urls.push(url);
+        }
+        sendSuccess(res, 'Photos uploaded successfully to Cloudinary', { urls, url: urls[0] }, 201);
+        return;
+      }
+
+      // 3. If base64 data string passed in JSON body
+      if (req.body && req.body.image) {
+        const base64Data = req.body.image;
+        const uploadRes = await uploadToCloudinary(base64Data, 'brijrani_erp/grn_photos');
+        sendSuccess(res, 'Photo uploaded successfully to Cloudinary', { url: uploadRes.secure_url, secure_url: uploadRes.secure_url, public_id: uploadRes.public_id }, 201);
+        return;
+      }
+
+      // 4. If array of base64 images passed in JSON body
+      if (req.body && Array.isArray(req.body.images)) {
+        const urls: string[] = [];
+        for (const img of req.body.images) {
+          const uploadRes = await uploadToCloudinary(img, 'brijrani_erp/grn_photos');
+          urls.push(uploadRes.secure_url);
+        }
+        sendSuccess(res, 'Photos uploaded successfully to Cloudinary', { urls, url: urls[0] }, 201);
+        return;
+      }
+
+      throw new CustomError('No photo file or image data provided for upload', 400);
     } catch (err) {
       next(err);
     }

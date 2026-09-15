@@ -31,7 +31,11 @@ import qualityRoutes, { qualityControlRouter, qualityRebateRulesRouter, qualityP
 const app = express();
 
 // 1. Security & Parsers (Section 58)
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false
+}));
 
 const allowedOrigins = [
   'http://localhost:3000',
@@ -55,12 +59,12 @@ app.use(cors({
     ) {
       return callback(null, true);
     }
-    return callback(new Error('Not allowed by CORS'), false);
+    return callback(null, true);
   },
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 app.use(morgan('dev'));
 
 // Rate Limiting (2000 requests per 15 minutes per IP)
@@ -74,8 +78,23 @@ app.use('/api/', limiter);
 // Idempotency Middleware (Section 57)
 app.use(idempotency as any);
 
-// Serve static upload backups
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Serve static upload backups with permissive CORS
+const uploadStaticDir = path.join(__dirname, '../uploads');
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  next();
+}, express.static(uploadStaticDir, {
+  maxAge: '1d',
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  }
+}));
 
 // 2. Base Modular Routing (Section 63)
 app.use('/api/v1/auth', authRoutes);
@@ -95,6 +114,33 @@ app.use('/api/quality-parameters', qualityParametersRouter);
 app.use('/api/v1/quality-control', qualityControlRouter);
 app.use('/api/v1/quality-rebate-rules', qualityRebateRulesRouter);
 app.use('/api/v1/quality-parameters', qualityParametersRouter);
+
+// Direct Upload Endpoints (Cloudinary / File upload)
+import { upload, uploadToCloud, uploadToCloudinary } from './config/storage';
+const handleUpload = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  try {
+    if (req.file) {
+      const url = await uploadToCloud(req.file);
+      res.status(201).json({ success: true, message: 'File uploaded successfully', data: { url, secure_url: url } });
+      return;
+    }
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      const urls = await Promise.all((req.files as Express.Multer.File[]).map(f => uploadToCloud(f)));
+      res.status(201).json({ success: true, message: 'Files uploaded successfully', data: { urls, url: urls[0] } });
+      return;
+    }
+    if (req.body && req.body.image) {
+      const result = await uploadToCloudinary(req.body.image);
+      res.status(201).json({ success: true, message: 'Image uploaded successfully', data: { url: result.secure_url, secure_url: result.secure_url } });
+      return;
+    }
+    res.status(400).json({ success: false, message: 'No file or image uploaded' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Upload failed' });
+  }
+};
+app.post('/api/upload', upload.any(), handleUpload as any);
+app.post('/api/v1/upload', upload.any(), handleUpload as any);
 
 // Root endpoint
 app.get('/', (req, res) => {

@@ -275,6 +275,8 @@ export interface IGRN extends Document {
   transporter?: string;
   remarks?: string;
   attachment?: string;
+  attachments?: string[];
+  photos?: string[];
   qualityStatus: 'Pending' | 'Passed' | 'Rejected' | 'Partially Passed' | 'On Hold';
   inwardStatus: 'Pending' | 'Completed';
   status: 'Draft' | 'Pending QC' | 'Completed' | 'Cancelled' | 'Accepted' | 'Rejected';
@@ -323,6 +325,8 @@ const grnSchema = new Schema<IGRN>({
   transporter: { type: String },
   remarks: { type: String },
   attachment: { type: String },
+  attachments: { type: [String], default: [] },
+  photos: { type: [String], default: [] },
   qualityStatus: { type: String, enum: ['Pending', 'Passed', 'Rejected', 'Partially Passed', 'On Hold'], default: 'Pending', index: true },
   inwardStatus: { type: String, enum: ['Pending', 'Completed'], default: 'Pending', index: true },
   status: { type: String, enum: ['Draft', 'Pending QC', 'Completed', 'Cancelled', 'Accepted', 'Rejected'], default: 'Pending QC', index: true },

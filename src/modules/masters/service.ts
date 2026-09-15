@@ -12,6 +12,7 @@ import { Voucher, LedgerEntry } from '../finance/model';
 import { Lead, Opportunity, Activity, FollowUp, CrmAutomationRule } from '../crm/model';
 import { AuditLog } from '../audit/model';
 import { MarketPrice, PriceAlert } from '../marketPrices/model';
+import { QualityParameter, QualityRebateRule } from '../quality/model';
 import { Settings } from '../settings/model';
 import { CustomError } from '../../middlewares/errorHandler';
 import mongoose from 'mongoose';
@@ -126,13 +127,13 @@ export const mastersService = {
     const existing = await Commodity.findOne({ name: data.name });
     if (existing) throw new CustomError(`Commodity "${data.name}" already exists`, 400);
 
-    const code = `CMD-${Date.now().toString().slice(-6)}`;
+    const code = data.commodityCode || data.sku || `CMD-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
     const commodity = new Commodity({
       commodityCode: code,
       name: data.name,
-      category: data.category,
+      category: data.category || 'Grains',
       unit: data.unit || 'MT',
-      hsn: data.hsn,
+      hsn: data.hsn || '1001',
       gstRate: data.gstRate !== undefined ? Number(data.gstRate) : 5,
       purchasePrice: data.purchasePrice || 0,
       sellingPrice: data.sellingPrice || 0,
@@ -141,7 +142,107 @@ export const mastersService = {
       batchTracking: data.batchTracking !== false,
       qualityParameters: data.qualityParameters || []
     });
-    return await commodity.save();
+    const saved = await commodity.save();
+
+    // If qualityRebateRules were supplied, persist/sync them
+    if (Array.isArray(data.qualityRebateRules) && data.qualityRebateRules.length > 0) {
+      for (const rule of data.qualityRebateRules) {
+        try {
+          const ruleCode = rule.ruleCode || `QRR-${(saved.name || 'COMM').slice(0, 4).toUpperCase()}-${(rule.parameterName || 'PARAM').slice(0, 4).toUpperCase()}-${Date.now().toString().slice(-3)}`;
+          await QualityRebateRule.create({
+            ruleCode,
+            commodityId: saved._id,
+            commodityName: saved.name,
+            parameterName: rule.parameterName,
+            unit: rule.unit || '%',
+            standardValue: Number(rule.standardValue ?? 0),
+            minValue: rule.minValue !== undefined && rule.minValue !== '' ? Number(rule.minValue) : undefined,
+            maxValue: rule.maxValue !== undefined && rule.maxValue !== '' ? Number(rule.maxValue) : undefined,
+            tolerance: Number(rule.tolerance || 0),
+            rebateType: rule.rebateType || 'Standard Rebate',
+            calculationMethod: rule.calculationMethod || 'Pro-Rata',
+            rebateBasis: rule.rebateBasis || 'Tiered Slabs',
+            rebateRate: Number(rule.rebateRate || 0),
+            slabs: rule.slabs || [],
+            direction: rule.direction || 'HIGHER_IS_WORSE',
+            effectiveFrom: rule.effectiveFrom ? new Date(rule.effectiveFrom) : new Date(),
+            effectiveTo: rule.effectiveTo ? new Date(rule.effectiveTo) : undefined,
+            status: rule.status || 'Active',
+            notes: rule.notes || `Created with commodity ${saved.name}`
+          });
+        } catch (err) {
+          console.warn(`[createCommodity] Failed to create rule ${rule.parameterName}:`, err);
+        }
+      }
+    }
+
+    return saved;
+  },
+
+  updateCommodity: async (id: string, data: any): Promise<ICommodity> => {
+    const commodity = await Commodity.findById(id);
+    if (!commodity) throw new CustomError('Commodity not found', 404);
+
+    if (data.name && data.name !== commodity.name) {
+      const existing = await Commodity.findOne({ name: data.name, _id: { $ne: id } });
+      if (existing) throw new CustomError(`Commodity "${data.name}" already exists`, 400);
+      commodity.name = data.name;
+    }
+    if (data.category) commodity.category = data.category;
+    if (data.unit) commodity.unit = data.unit;
+    if (data.hsn) commodity.hsn = data.hsn;
+    if (data.gstRate !== undefined) commodity.gstRate = Number(data.gstRate);
+    if (data.purchasePrice !== undefined) commodity.purchasePrice = Number(data.purchasePrice);
+    if (data.sellingPrice !== undefined) commodity.sellingPrice = Number(data.sellingPrice);
+    if (data.minimumStock !== undefined) commodity.minimumStock = Number(data.minimumStock);
+    if (data.maximumStock !== undefined) commodity.maximumStock = Number(data.maximumStock);
+    if (data.batchTracking !== undefined) commodity.batchTracking = data.batchTracking;
+    if (data.qualityParameters) commodity.qualityParameters = data.qualityParameters;
+
+    const saved = await commodity.save();
+
+    // If qualityRebateRules were supplied, sync them with backend QualityRebateRule collection
+    if (Array.isArray(data.qualityRebateRules) && data.qualityRebateRules.length > 0) {
+      for (const rule of data.qualityRebateRules) {
+        try {
+          const rulePayload = {
+            commodityId: saved._id,
+            commodityName: saved.name,
+            parameterName: rule.parameterName,
+            unit: rule.unit || '%',
+            standardValue: Number(rule.standardValue ?? 0),
+            minValue: rule.minValue !== undefined && rule.minValue !== '' ? Number(rule.minValue) : undefined,
+            maxValue: rule.maxValue !== undefined && rule.maxValue !== '' ? Number(rule.maxValue) : undefined,
+            tolerance: Number(rule.tolerance || 0),
+            rebateType: rule.rebateType || 'Standard Rebate',
+            calculationMethod: rule.calculationMethod || 'Pro-Rata',
+            rebateBasis: rule.rebateBasis || 'Tiered Slabs',
+            rebateRate: Number(rule.rebateRate || 0),
+            slabs: rule.slabs || [],
+            direction: rule.direction || 'HIGHER_IS_WORSE',
+            effectiveFrom: rule.effectiveFrom ? new Date(rule.effectiveFrom) : new Date(),
+            effectiveTo: rule.effectiveTo ? new Date(rule.effectiveTo) : undefined,
+            status: rule.status || 'Active',
+            notes: rule.notes || `Updated with commodity ${saved.name}`
+          };
+
+          if (rule.id || rule._id) {
+            await QualityRebateRule.findByIdAndUpdate(rule.id || rule._id, rulePayload, { new: true });
+          } else {
+            const ruleCode = rule.ruleCode || `QRR-${(saved.name || 'COMM').slice(0, 4).toUpperCase()}-${(rule.parameterName || 'PARAM').slice(0, 4).toUpperCase()}-${Date.now().toString().slice(-3)}`;
+            await QualityRebateRule.create({ ...rulePayload, ruleCode });
+          }
+        } catch (err) {
+          console.warn(`[updateCommodity] Failed to sync rule ${rule.parameterName}:`, err);
+        }
+      }
+    }
+
+    return saved;
+  },
+
+  getCommodityById: async (id: string): Promise<ICommodity | null> => {
+    return await Commodity.findById(id);
   },
 
   listCommodities: async (): Promise<ICommodity[]> => {

@@ -32,6 +32,8 @@ router.delete('/farmers/:id', mastersController.deleteFarmer);
 // Commodities
 router.post('/commodities', mastersController.createCommodity);
 router.get('/commodities', mastersController.listCommodities);
+router.get('/commodities/:id', mastersController.getCommodityById);
+router.put('/commodities/:id', mastersController.updateCommodity);
 router.delete('/commodities/:id', mastersController.deleteCommodity);
 
 // Warehouses

@@ -89,6 +89,27 @@ export const mastersController = {
     }
   },
 
+  updateCommodity: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const commodity = await mastersService.updateCommodity(req.params.id as string, req.body);
+      sendSuccess(res, 'Commodity updated successfully', commodity);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  getCommodityById: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const commodity = await mastersService.getCommodityById(req.params.id as string);
+      if (!commodity) {
+        throw new CustomError('Commodity not found', 404);
+      }
+      sendSuccess(res, 'Commodity retrieved successfully', commodity);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   listCommodities: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const list = await mastersService.listCommodities();

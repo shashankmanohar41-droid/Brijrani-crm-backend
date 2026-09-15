@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import { procurementController } from './controller';
 import { authenticate } from '../../middlewares/auth';
+import { upload } from '../../config/storage';
 
 const router = Router();
+
+// Allow public/authenticated upload for GRN photos & procurement attachments
+router.post('/upload', upload.any() as any, procurementController.uploadPhoto);
 
 router.use(authenticate as any);
 

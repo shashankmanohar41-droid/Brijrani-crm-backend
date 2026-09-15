@@ -2,8 +2,12 @@ import { Schema, model, Document } from 'mongoose';
 
 export interface IQualityParamConstraint {
   name: string;
+  unit?: string;
+  standardValue?: number;
+  tolerance?: number;
   minLimit?: number;
   maxLimit?: number;
+  direction?: 'HIGHER_IS_WORSE' | 'LOWER_IS_WORSE';
 }
 
 export interface ICommodity extends Document {
@@ -36,8 +40,12 @@ const commoditySchema = new Schema<ICommodity>({
   qualityParameters: {
     type: [{
       name: { type: String, required: true },
+      unit: { type: String, default: '%' },
+      standardValue: { type: Number },
+      tolerance: { type: Number, default: 0 },
       minLimit: { type: Number },
-      maxLimit: { type: Number }
+      maxLimit: { type: Number },
+      direction: { type: String, enum: ['HIGHER_IS_WORSE', 'LOWER_IS_WORSE'], default: 'HIGHER_IS_WORSE' }
     }],
     default: []
   }
