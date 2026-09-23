@@ -7,6 +7,10 @@ const router = Router();
 // Public endpoint — no auth needed, used by all browsers to check if DB was cleared
 router.get('/db-status', mastersController.getDbStatus);
 
+// GSTIN Lookup API
+router.get('/gst/lookup/:gstin', mastersController.lookupGst);
+router.post('/gst/lookup', mastersController.lookupGst);
+
 // Apply authentication middleware to all master data endpoints
 router.use(authenticate as any);
 

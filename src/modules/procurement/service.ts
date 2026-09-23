@@ -31,7 +31,7 @@ const requireObjectId = (id: any, fieldName: string): mongoose.Types.ObjectId =>
 export const procurementService = {
   // --- ENQUIRIES ---
   createEnquiry: async (data: any, createdBy: string) => {
-    const enquiryNo = `PEQ-2026-${String(await PurchaseEnquiry.countDocuments() + 1).padStart(5, '0')}`;
+    const enquiryNo = data.enquiryNo || `PEQ-2026-${String(await PurchaseEnquiry.countDocuments() + 1).padStart(5, '0')}`;
     
     const items = (data.items || []).map((i: any) => ({
       item: toObjectId(i.item, 'item'),
@@ -63,7 +63,7 @@ export const procurementService = {
 
   // --- QUOTATIONS ---
   createQuotation: async (data: any, createdBy: string) => {
-    const quotationNo = `PQT-2026-${String(await PurchaseQuotation.countDocuments() + 1).padStart(5, '0')}`;
+    const quotationNo = data.quotationNo || `PQT-2026-${String(await PurchaseQuotation.countDocuments() + 1).padStart(5, '0')}`;
     
     const items = (data.items || []).map((i: any) => ({
       item: toObjectId(i.item, 'item'),
@@ -112,7 +112,7 @@ export const procurementService = {
 
   // --- PURCHASE ORDER ---
   createPO: async (data: any, createdBy: string) => {
-    const poNo = `PO-2026-${String(await PurchaseOrder.countDocuments() + 1).padStart(5, '0')}`;
+    const poNo = data.poNo || `PO-2026-${String(await PurchaseOrder.countDocuments() + 1).padStart(5, '0')}`;
     
     const items = (data.items || []).map((i: any) => ({
       item: toObjectId(i.item, 'item'),

@@ -275,5 +275,15 @@ export const mastersController = {
     } catch (err) {
       next(err);
     }
+  },
+
+  lookupGst: async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const gstin = (req.params.gstin || req.body.gstin || req.query.gstin) as string;
+      const result = await mastersService.lookupGst(gstin);
+      sendSuccess(res, 'GSTIN details retrieved successfully', result);
+    } catch (err) {
+      next(err);
+    }
   }
 };

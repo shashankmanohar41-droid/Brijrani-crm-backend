@@ -4,7 +4,7 @@ import { Customer } from '../customers/model';
 import { Supplier } from '../suppliers/model';
 import { Farmer } from '../farmers/model';
 import { SalesInvoice } from '../sales/model';
-import { PurchaseOrder } from '../procurement/model';
+import { PurchaseOrder, PurchaseInvoice } from '../procurement/model';
 import { CustomError } from '../../middlewares/errorHandler';
 
 export const financeService = {
@@ -75,6 +75,37 @@ export const financeService = {
             await farmer.save({ session });
             debitAccount = `${farmer.name} Accounts Payable`;
             creditAccount = data.cashBankLink || 'SBI Working Cap A/c';
+          }
+        }
+
+        // Reconcile related Purchase Invoice (Payment to Vendor after GRN)
+        if (data.reference) {
+          const inv = await PurchaseInvoice.findOne({
+            $or: [
+              { invoiceNo: data.reference },
+              { poNumber: data.reference },
+              { grnNumber: data.reference }
+            ]
+          }).session(session);
+
+          if (inv) {
+            const currentPaid = inv.amountPaid || 0;
+            const newPaid = currentPaid + Number(data.amount);
+            const remaining = Math.max(0, inv.grandTotal - newPaid);
+            inv.amountPaid = newPaid;
+            inv.remainingAmount = remaining;
+            inv.status = remaining === 0 ? 'Paid' : 'Partially Paid';
+            inv.paymentHistory = inv.paymentHistory || [];
+            inv.paymentHistory.push({
+              voucherNo,
+              date: voucher.date,
+              amount: Number(data.amount),
+              mode: data.paymentMode,
+              reference: data.reference,
+              account: debitAccount,
+              narration: data.narration
+            });
+            await inv.save({ session });
           }
         }
       }

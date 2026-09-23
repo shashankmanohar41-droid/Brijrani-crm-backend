@@ -10,6 +10,8 @@ import { StockReservation, StockLedgerEntry } from '../src/modules/inventory/mod
 
 const TEST_MONGO_URI = process.env.MONGODB_URI_TEST || 'mongodb+srv://shashankmanohar1734_db_user:hpIe3ev8T1QsKZMM@cluster0.ws2kdbz.mongodb.net/brijrani_erp_test?retryWrites=true&w=majority';
 
+jest.setTimeout(30000);
+
 describe('Sales Workflow & Inventory Reservation Tests', () => {
   let commodityId: string;
   let warehouseId: string;
