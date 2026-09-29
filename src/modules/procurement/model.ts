@@ -571,6 +571,18 @@ export interface IPurchaseInvoice extends Document {
   status: 'Draft' | 'Pending Verification' | 'Matched' | 'Mismatch' | 'Approved' | 'Partially Paid' | 'Paid' | 'Disputed' | 'Cancelled';
   items: IPurchaseInvoiceItem[];
   mismatchReason?: string;
+  vehicleNo?: string;
+  driverName?: string;
+  driverPhone?: string;
+  transporter?: string;
+  lrNumber?: string;
+  lrDate?: Date;
+  ewayBillNo?: string;
+  grossWeight?: number;
+  tareWeight?: number;
+  netWeight?: number;
+  isFinalInvoice?: boolean;
+  invoiceType?: 'Preliminary' | 'Final';
   createdBy: string;
   amountPaid?: number;
   remainingAmount?: number;
@@ -619,6 +631,18 @@ const purchaseInvoiceSchema = new Schema<IPurchaseInvoice>({
   otherCharges: { type: Number, default: 0 },
   roundOff: { type: Number, default: 0 },
   grandTotal: { type: Number, required: true },
+  vehicleNo: { type: String },
+  driverName: { type: String },
+  driverPhone: { type: String },
+  transporter: { type: String },
+  lrNumber: { type: String },
+  lrDate: { type: Date },
+  ewayBillNo: { type: String },
+  grossWeight: { type: Number, default: 0 },
+  tareWeight: { type: Number, default: 0 },
+  netWeight: { type: Number, default: 0 },
+  isFinalInvoice: { type: Boolean, default: false },
+  invoiceType: { type: String, enum: ['Preliminary', 'Final'], default: 'Preliminary' },
   status: {
     type: String,
     enum: ['Draft', 'Pending Verification', 'Matched', 'Mismatch', 'Approved', 'Partially Paid', 'Paid', 'Disputed', 'Cancelled'],
