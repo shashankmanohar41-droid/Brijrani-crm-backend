@@ -424,18 +424,22 @@ export const qualityService = {
       transactionDate: txDate
     });
 
+    const isLotRejected = Boolean(calcResult.isRejected);
+    const initialStatus = isLotRejected ? 'Rejected' : (data.status || 'Draft');
+
     const initialAudit: any = {
-      action: 'Created',
+      action: isLotRejected ? 'Rejected' : 'Created',
       user,
       timestamp: new Date(),
-      reason: 'Initial QC Creation',
+      reason: isLotRejected ? `Auto-Rejected: ${calcResult.rejectionReason}` : 'Initial QC Creation',
       newValues: {
         qcNumber,
         commodity: commodityName,
         quantity: data.quantity,
         baseRate: data.baseRate,
         finalRate: calcResult.finalRate,
-        finalValue: calcResult.finalValue
+        finalValue: calcResult.finalValue,
+        status: initialStatus
       }
     };
 
@@ -468,7 +472,10 @@ export const qualityService = {
       finalRate: calcResult.finalRate,
       finalValue: calcResult.finalValue,
       calculationBreakdown: calcResult.calculationBreakdown,
-      status: data.status || 'Draft',
+      status: initialStatus,
+      rejectionReason: isLotRejected ? calcResult.rejectionReason : undefined,
+      rejectedBy: isLotRejected ? user : undefined,
+      rejectedAt: isLotRejected ? new Date() : undefined,
       inspector: data.inspector || user,
       notes: data.notes,
       createdBy: user,
@@ -588,6 +595,8 @@ export const qualityService = {
       transactionDate: txDate
     });
 
+    const isLotRejected = Boolean(calcResult.isRejected);
+
     qc.quantity = qty;
     qc.baseRate = rate;
     qc.date = txDate;
@@ -604,6 +613,13 @@ export const qualityService = {
     qc.calculationBreakdown = calcResult.calculationBreakdown;
     qc.updatedBy = user;
 
+    if (isLotRejected) {
+      qc.status = 'Rejected';
+      qc.rejectionReason = calcResult.rejectionReason;
+      qc.rejectedBy = user;
+      qc.rejectedAt = new Date();
+    }
+
     if (data.modificationReason) {
       qc.modificationReason = data.modificationReason;
     }
@@ -616,17 +632,18 @@ export const qualityService = {
     if (previousSnapshot.finalValue !== qc.finalValue) changes.push({ field: 'finalValue', oldValue: previousSnapshot.finalValue, newValue: qc.finalValue });
 
     qc.auditTrail.push({
-      action: isApproved ? 'Modified_After_Approval' : 'Updated',
+      action: isLotRejected ? 'Rejected' : (isApproved ? 'Modified_After_Approval' : 'Updated'),
       user,
       timestamp: new Date(),
-      reason: data.modificationReason || 'QC details updated',
+      reason: isLotRejected ? `Auto-Rejected on update: ${calcResult.rejectionReason}` : (data.modificationReason || 'QC details updated'),
       previousValues: previousSnapshot,
       newValues: {
         quantity: qc.quantity,
         baseRate: qc.baseRate,
         totalRebate: qc.totalRebate,
         finalRate: qc.finalRate,
-        finalValue: qc.finalValue
+        finalValue: qc.finalValue,
+        status: qc.status
       },
       changes
     });
@@ -639,6 +656,23 @@ export const qualityService = {
     if (!qc) throw new CustomError('Quality Control record not found', 404);
     if (qc.status !== 'Draft') {
       throw new CustomError(`Only Draft QC can be submitted. Current status: ${qc.status}`, 400);
+    }
+
+    // Check if any parameter violates limit
+    const rejectedParam = (qc.qualityParameters || []).find((p: any) => p.isRejected || (p.maxLimit !== undefined && p.actualValue > p.maxLimit) || (p.minLimit !== undefined && p.actualValue < p.minLimit));
+    if (rejectedParam) {
+      qc.status = 'Rejected';
+      qc.rejectionReason = rejectedParam.rejectionReason || `Parameter '${rejectedParam.parameterName}' exceeds allowable limit (${rejectedParam.actualValue} vs [${rejectedParam.minLimit ?? 0}-${rejectedParam.maxLimit ?? '∞'}])`;
+      qc.rejectedBy = user;
+      qc.rejectedAt = new Date();
+      qc.updatedBy = user;
+      qc.auditTrail.push({
+        action: 'Rejected',
+        user,
+        timestamp: new Date(),
+        reason: `Auto-Rejected on submission: ${qc.rejectionReason}`
+      });
+      return await qc.save();
     }
 
     qc.status = 'Submitted';
@@ -659,6 +693,16 @@ export const qualityService = {
 
     if (qc.status === 'Approved') {
       throw new CustomError('QC record is already approved', 400);
+    }
+
+    if (qc.status === 'Rejected') {
+      throw new CustomError(`Cannot approve a Rejected QC record. Reason: ${qc.rejectionReason || 'Quality limits breached'}`, 400);
+    }
+
+    // Double check parameter limits
+    const rejectedParam = (qc.qualityParameters || []).find((p: any) => p.isRejected || (p.maxLimit !== undefined && p.actualValue > p.maxLimit) || (p.minLimit !== undefined && p.actualValue < p.minLimit));
+    if (rejectedParam) {
+      throw new CustomError(`Cannot approve QC: Parameter '${rejectedParam.parameterName}' breaches allowable limits (Value: ${rejectedParam.actualValue}, Limit: [${rejectedParam.minLimit ?? 0} - ${rejectedParam.maxLimit ?? '∞'}]). Lot must be Rejected.`, 400);
     }
 
     qc.status = 'Approved';

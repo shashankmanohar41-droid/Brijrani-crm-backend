@@ -4,6 +4,10 @@ export interface QualityParameterInput {
   unit?: string;
   standardValue?: number;
   tolerance?: number;
+  minLimit?: number;
+  maxLimit?: number;
+  minValue?: number;
+  maxValue?: number;
 }
 
 export interface CalculationInput {
@@ -27,6 +31,8 @@ export interface ParameterCalculationResult {
   actualValue: number;
   deviation: number;
   tolerance: number;
+  minLimit?: number;
+  maxLimit?: number;
   applicableRuleId?: any;
   ruleCode?: string;
   rebateBasis: string;
@@ -35,6 +41,8 @@ export interface ParameterCalculationResult {
   rebateTotal: number;
   formulaDescription: string;
   status: 'PASS' | 'WARN' | 'FAIL';
+  isRejected?: boolean;
+  rejectionReason?: string;
 }
 
 export interface QualityCalculationOutput {
@@ -44,6 +52,8 @@ export interface QualityCalculationOutput {
   totalDeduction: number; // Total money deduction
   finalRate: number; // baseRate - totalRebate
   finalValue: number; // quantity * finalRate
+  isRejected?: boolean;
+  rejectionReason?: string;
   calculationBreakdown: {
     method: string;
     rebateType: string;
@@ -183,6 +193,8 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
   }
 
   let proRataRebateTotal = 0;
+  let hasRejection = false;
+  const rejectionReasons: string[] = [];
 
   for (const param of paramsToProcess) {
     const matchingRule = applicableRules.find(rule => {
@@ -231,6 +243,12 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
     const actualValue = Number(param.actualValue ?? 0);
     const unit = matchingRule?.unit || param.unit || '%';
 
+    // Allowable min/max limits
+    const rawMin = param.minLimit !== undefined ? param.minLimit : (param.minValue !== undefined ? param.minValue : (matchingRule?.minValue !== undefined ? matchingRule.minValue : (matchingRule as any)?.minLimit));
+    const rawMax = param.maxLimit !== undefined ? param.maxLimit : (param.maxValue !== undefined ? param.maxValue : (matchingRule?.maxValue !== undefined ? matchingRule.maxValue : (matchingRule as any)?.maxLimit));
+    const minLimit = rawMin !== undefined && rawMin !== null && !isNaN(Number(rawMin)) ? Number(rawMin) : undefined;
+    const maxLimit = rawMax !== undefined && rawMax !== null && !isNaN(Number(rawMax)) ? Number(rawMax) : undefined;
+
     const direction = matchingRule?.direction || (
       param.parameterName.toLowerCase().includes('protein') || param.parameterName.toLowerCase().includes('oil') 
         ? 'LOWER_IS_WORSE' 
@@ -247,8 +265,27 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
     let rebatePerUnit = 0;
     let formulaDesc = '';
     let status: 'PASS' | 'WARN' | 'FAIL' = 'PASS';
+    let isParamRejected = false;
+    let paramRejectionReason: string | undefined = undefined;
 
-    if (rawDeviation <= 0) {
+    // Check Limit Breaches for Rejection
+    if (maxLimit !== undefined && actualValue > maxLimit) {
+      isParamRejected = true;
+      paramRejectionReason = `${param.parameterName} (${actualValue}${unit}) exceeds allowable Upper Limit (${maxLimit}${unit}) -> Lot Rejected`;
+      hasRejection = true;
+      rejectionReasons.push(paramRejectionReason);
+    } else if (minLimit !== undefined && actualValue < minLimit) {
+      isParamRejected = true;
+      paramRejectionReason = `${param.parameterName} (${actualValue}${unit}) falls below allowable Lower Limit (${minLimit}${unit}) -> Lot Rejected`;
+      hasRejection = true;
+      rejectionReasons.push(paramRejectionReason);
+    }
+
+    if (isParamRejected) {
+      status = 'FAIL';
+      rebatePerUnit = 0;
+      formulaDesc = `REJECTED: ${paramRejectionReason}`;
+    } else if (rawDeviation <= 0) {
       rebatePerUnit = 0;
       formulaDesc = `Actual (${actualValue}${unit}) meets Standard (${standardValue}${unit}) -> No Rebate (₹0/unit)`;
       status = 'PASS';
@@ -300,7 +337,7 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
     proRataRebateTotal += rebatePerUnit;
 
     breakdownDetails.push(
-      `${param.parameterName} (${matchingRule?.ruleCode || 'Master Rule'}): Standard ${standardValue}${unit}, Actual ${actualValue}${unit} | Dev: ${rawDeviation > 0 ? '+' : ''}${rawDeviation.toFixed(2)}${unit} (Tol: ±${tolerance}${unit}) -> ${formulaDesc}`
+      `${param.parameterName} (${matchingRule?.ruleCode || 'Master Rule'}): Standard ${standardValue}${unit}, Actual ${actualValue}${unit}${minLimit !== undefined || maxLimit !== undefined ? ` [Limit: ${minLimit ?? '0'} - ${maxLimit ?? '∞'}${unit}]` : ''} | Dev: ${rawDeviation > 0 ? '+' : ''}${rawDeviation.toFixed(2)}${unit} (Tol: ±${tolerance}${unit}) -> ${formulaDesc}`
     );
 
     parameterCalculations.push({
@@ -310,6 +347,8 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
       actualValue,
       deviation: rawDeviation,
       tolerance,
+      minLimit,
+      maxLimit,
       applicableRuleId: matchingRule?._id || matchingRule?.id,
       ruleCode: matchingRule?.ruleCode || 'DEFAULT-RULE',
       rebateBasis: matchingRule?.rebateBasis || 'Per % Deviation',
@@ -317,7 +356,9 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
       rebatePerUnit,
       rebateTotal,
       formulaDescription: formulaDesc,
-      status
+      status,
+      isRejected: isParamRejected,
+      rejectionReason: paramRejectionReason
     });
   }
 
@@ -327,9 +368,13 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
   const finalRate = round2(Math.max(0, validBaseRate - totalRebate));
   const finalValue = round2(validQty * finalRate);
 
-  const summaryText = calculationMethod === 'Both'
-    ? `Hybrid Settlement (${rebateType}): Base Rate ₹${validBaseRate.toLocaleString('en-IN')} - (QC Rebate ₹${proRataRebateTotal} + Discount ₹${discountAmountPerUnit}) = Final Rate ₹${finalRate.toLocaleString('en-IN')}/unit. Final Value = ₹${finalValue.toLocaleString('en-IN')}`
-    : `Pro-Rata (${rebateType}): Base Rate ₹${validBaseRate.toLocaleString('en-IN')} - Total Quality Rebate ₹${totalRebate} = Final Rate ₹${finalRate.toLocaleString('en-IN')}/unit. Total Final Value = ₹${finalValue.toLocaleString('en-IN')}`;
+  const mainRejectionText = hasRejection ? rejectionReasons.join('; ') : '';
+
+  const summaryText = hasRejection
+    ? `REJECTED: Lot exceeds allowable quality limits. Reason: ${mainRejectionText}`
+    : calculationMethod === 'Both'
+      ? `Hybrid Settlement (${rebateType}): Base Rate ₹${validBaseRate.toLocaleString('en-IN')} - (QC Rebate ₹${proRataRebateTotal} + Discount ₹${discountAmountPerUnit}) = Final Rate ₹${finalRate.toLocaleString('en-IN')}/unit. Final Value = ₹${finalValue.toLocaleString('en-IN')}`
+      : `Pro-Rata (${rebateType}): Base Rate ₹${validBaseRate.toLocaleString('en-IN')} - Total Quality Rebate ₹${totalRebate} = Final Rate ₹${finalRate.toLocaleString('en-IN')}/unit. Total Final Value = ₹${finalValue.toLocaleString('en-IN')}`;
 
   return {
     baseValue,
@@ -338,6 +383,8 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
     totalDeduction,
     finalRate,
     finalValue,
+    isRejected: hasRejection,
+    rejectionReason: hasRejection ? mainRejectionText : undefined,
     calculationBreakdown: {
       method: calculationMethod,
       rebateType,

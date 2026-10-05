@@ -121,6 +121,8 @@ export interface IQCTestedParameter {
   actualValue: number;
   deviation: number;
   tolerance: number;
+  minLimit?: number;
+  maxLimit?: number;
   applicableRuleId?: any;
   ruleCode?: string;
   rebateBasis: string;
@@ -129,6 +131,8 @@ export interface IQCTestedParameter {
   rebateTotal: number; // rebatePerUnit * quantity
   formulaDescription: string;
   status: 'PASS' | 'WARN' | 'FAIL';
+  isRejected?: boolean;
+  rejectionReason?: string;
 }
 
 const qcTestedParameterSchema = new Schema<IQCTestedParameter>({
@@ -138,6 +142,8 @@ const qcTestedParameterSchema = new Schema<IQCTestedParameter>({
   actualValue: { type: Number, required: true },
   deviation: { type: Number, default: 0 },
   tolerance: { type: Number, default: 0 },
+  minLimit: { type: Number },
+  maxLimit: { type: Number },
   applicableRuleId: { type: Schema.Types.Mixed },
   ruleCode: { type: String },
   rebateBasis: { type: String, default: 'Per % Deviation' },
@@ -145,7 +151,9 @@ const qcTestedParameterSchema = new Schema<IQCTestedParameter>({
   rebatePerUnit: { type: Number, default: 0 },
   rebateTotal: { type: Number, default: 0 },
   formulaDescription: { type: String, default: '' },
-  status: { type: String, enum: ['PASS', 'WARN', 'FAIL'], default: 'PASS' }
+  status: { type: String, enum: ['PASS', 'WARN', 'FAIL'], default: 'PASS' },
+  isRejected: { type: Boolean, default: false },
+  rejectionReason: { type: String }
 }, { _id: false });
 
 // 5. QC Audit Trail Entry
