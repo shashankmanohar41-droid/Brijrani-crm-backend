@@ -26,6 +26,8 @@ router.post('/dispatch', salesController.dispatchOrder);
 router.post('/pod', salesController.submitPOD);
 
 router.get('/invoices', salesController.listInvoices);
+router.post('/invoices', salesController.createInvoice);
+router.post('/invoices/:id/receipt', salesController.recordPayment);
 
 // Return, Credit and Refund workflows
 router.get('/returns', salesController.listReturns);

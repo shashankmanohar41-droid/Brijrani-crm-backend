@@ -80,6 +80,26 @@ export const salesController = {
     }
   },
 
+  createInvoice: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const email = req.user?.id || 'admin';
+      const invoice = await salesService.createInvoice(req.body, email);
+      sendSuccess(res, 'Sales Invoice created successfully', invoice, 201);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  recordPayment: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const invoice = await salesService.recordPayment(id, req.body);
+      sendSuccess(res, 'Payment recorded successfully', invoice, 200);
+    } catch (err) {
+      next(err);
+    }
+  },
+
   listEnquiries: async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const list = await salesService.listEnquiries();

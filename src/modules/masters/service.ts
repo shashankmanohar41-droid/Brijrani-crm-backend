@@ -11,8 +11,8 @@ import { StockLedgerEntry, StockReservation } from '../inventory/model';
 import { Voucher, LedgerEntry } from '../finance/model';
 import { Lead, Opportunity, Activity, FollowUp, CrmAutomationRule } from '../crm/model';
 import { AuditLog } from '../audit/model';
-import { MarketPrice, PriceAlert } from '../marketPrices/model';
-import { QualityParameter, QualityRebateRule } from '../quality/model';
+import { QualityParameter, QualityRebateRule, QualityControl } from '../quality/model';
+import { PriceAlert, MarketPrice } from '../marketPrices/model';
 import { Settings } from '../settings/model';
 import { CustomError } from '../../middlewares/errorHandler';
 import mongoose from 'mongoose';
@@ -375,11 +375,12 @@ export const mastersService = {
       Lead.deleteMany({}),
       Opportunity.deleteMany({}),
       Activity.deleteMany({}),
-      FollowUp.deleteMany({}),
-      CrmAutomationRule.deleteMany({}),
       AuditLog.deleteMany({}),
       MarketPrice.deleteMany({}),
-      PriceAlert.deleteMany({})
+      PriceAlert.deleteMany({}),
+      QualityParameter.deleteMany({}),
+      QualityRebateRule.deleteMany({}),
+      QualityControl.deleteMany({})
     ]);
     // Stamp the cleared time so all browsers can detect the wipe on next load
     await Settings.updateOne({}, { $set: { clearedAt: new Date() } }, { upsert: true });

@@ -188,19 +188,29 @@ const qcAuditTrailSchema = new Schema<IQCAuditTrail>({
 // 6. Quality Control Document Model
 export interface IQualityControl extends Document {
   qcNumber: string;
-  partyType: 'supplier' | 'farmer';
-  partyId: any;
+  qcType?: 'Inward' | 'Outward' | 'Sales' | 'Procurement';
+  partyType: 'supplier' | 'farmer' | 'customer' | 'Customer / Buyer' | 'Supplier / Farmer';
+  partyId?: any;
   partyName: string;
+  customerId?: any;
+  customerName?: string;
   commodityId: any;
   commodityName: string;
   vehicleNumber: string;
   quantity: number;
   unit: string;
-  baseRate: number; // Purchase Rate per MT/Qtl
+  baseRate: number; // Purchase / Sale Rate per MT/Qtl
   date: Date;
   referenceNumber?: string;
   poId?: any;
   poNumber?: string;
+  soId?: any;
+  soNumber?: string;
+  soNo?: string;
+  orderType?: string;
+  invoiceId?: any;
+  invoiceNumber?: string;
+  invoiceNo?: string;
   grnId?: any;
   grnNumber?: string;
   rebateType: 'Standard Rebate' | 'Single Rebate' | 'Double Rebate' | 'All' | 'All Types';
@@ -233,12 +243,15 @@ export interface IQualityControl extends Document {
 
 const qualityControlSchema = new Schema<IQualityControl>({
   qcNumber: { type: String, required: true, unique: true, index: true },
-  partyType: { type: String, enum: ['supplier', 'farmer'], required: true },
-  partyId: { type: Schema.Types.Mixed, required: true, index: true },
+  qcType: { type: String, enum: ['Inward', 'Outward', 'Sales', 'Procurement'], default: 'Outward' },
+  partyType: { type: String, enum: ['supplier', 'farmer', 'customer', 'Customer / Buyer', 'Supplier / Farmer'], required: false },
+  partyId: { type: Schema.Types.Mixed, required: false, index: true },
   partyName: { type: String, required: true },
+  customerId: { type: Schema.Types.Mixed, index: true },
+  customerName: { type: String },
   commodityId: { type: Schema.Types.Mixed, required: true, index: true },
   commodityName: { type: String, required: true },
-  vehicleNumber: { type: String, required: true, index: true },
+  vehicleNumber: { type: String, required: false, index: true },
   quantity: { type: Number, required: true, min: [0.0001, 'Quantity must be positive'] },
   unit: { type: String, default: 'MT' },
   baseRate: { type: Number, required: true, min: [0, 'Base rate cannot be negative'] },
@@ -246,6 +259,13 @@ const qualityControlSchema = new Schema<IQualityControl>({
   referenceNumber: { type: String, index: true },
   poId: { type: Schema.Types.Mixed },
   poNumber: { type: String },
+  soId: { type: Schema.Types.Mixed, index: true },
+  soNumber: { type: String, index: true },
+  soNo: { type: String, index: true },
+  orderType: { type: String },
+  invoiceId: { type: Schema.Types.Mixed },
+  invoiceNumber: { type: String },
+  invoiceNo: { type: String },
   grnId: { type: Schema.Types.Mixed },
   grnNumber: { type: String },
   rebateType: { 

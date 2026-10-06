@@ -205,35 +205,57 @@ export interface ISalesInvoiceItem {
 // 7. Sales Invoice
 export interface ISalesInvoice extends Document {
   invoiceNo: string;
-  soId: Types.ObjectId;
-  customerId: Types.ObjectId;
+  soId?: any;
+  soNo?: string;
+  qcId?: any;
+  qcNumber?: string;
+  grnNumber?: string;
+  grnNo?: string;
+  dcNo?: string;
+  dcId?: any;
+  vehicleNo?: string;
+  orderType?: 'GT' | 'WH';
+  customerId: any;
   invoiceDate: Date;
   dueDate: Date;
   items: ISalesInvoiceItem[];
   taxableAmount: number;
-  discountAmount: number;
+  discountAmount?: number;
   cgst: number;
   sgst: number;
   igst: number;
-  freightCost: number;
-  otherCharges: number;
+  freightCost?: number;
+  otherCharges?: number;
   grandTotal: number;
-  placeOfSupply: string; // State e.g. 'Bihar' or 'West Bengal'
+  placeOfSupply?: string;
   paymentStatus: 'Unpaid' | 'Partially Paid' | 'Paid' | 'Overdue';
+  amountPaid?: number;
+  remainingAmount?: number;
+  paymentLogs?: any[];
+  remarks?: string;
   ewayBillNo?: string;
   createdBy: string;
 }
 
 const salesInvoiceSchema = new Schema<ISalesInvoice>({
   invoiceNo: { type: String, required: true, unique: true, index: true },
-  soId: { type: Schema.Types.ObjectId, ref: 'SalesOrder', required: true, index: true },
-  customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
+  soId: { type: Schema.Types.Mixed, ref: 'SalesOrder', required: false, index: true },
+  soNo: { type: String, index: true },
+  qcId: { type: Schema.Types.Mixed, required: false },
+  qcNumber: { type: String, index: true },
+  grnNumber: { type: String, index: true },
+  grnNo: { type: String, index: true },
+  dcNo: { type: String, index: true },
+  dcId: { type: Schema.Types.Mixed, required: false },
+  vehicleNo: { type: String },
+  orderType: { type: String, enum: ['GT', 'WH'], default: 'WH' },
+  customerId: { type: Schema.Types.Mixed, ref: 'Customer', required: true, index: true },
   invoiceDate: { type: Date, required: true, default: Date.now, index: true },
   dueDate: { type: Date, required: true, index: true },
   items: {
     type: [{
-      commodityId: { type: Schema.Types.ObjectId, ref: 'Commodity', required: true },
-      hsn: { type: String, required: true },
+      commodityId: { type: Schema.Types.Mixed, ref: 'Commodity', required: true },
+      hsn: { type: String, default: '10019910' },
       quantity: { type: Number, required: true },
       rate: { type: Number, required: true },
       discount: { type: Number, default: 0 },
@@ -253,15 +275,19 @@ const salesInvoiceSchema = new Schema<ISalesInvoice>({
   freightCost: { type: Number, default: 0 },
   otherCharges: { type: Number, default: 0 },
   grandTotal: { type: Number, required: true },
-  placeOfSupply: { type: String, required: true },
+  placeOfSupply: { type: String, default: 'Bihar' },
   paymentStatus: {
     type: String,
     enum: ['Unpaid', 'Partially Paid', 'Paid', 'Overdue'],
     default: 'Unpaid',
     index: true
   },
+  amountPaid: { type: Number, default: 0 },
+  remainingAmount: { type: Number },
+  paymentLogs: { type: Array, default: [] },
+  remarks: { type: String },
   ewayBillNo: { type: String },
-  createdBy: { type: String, required: true }
+  createdBy: { type: String, default: 'System' }
 }, { timestamps: true });
 
 export const SalesEnquiry = model<ISalesEnquiry>('SalesEnquiry', salesEnquirySchema);

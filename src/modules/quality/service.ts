@@ -386,31 +386,20 @@ export const qualityService = {
 
     // Resolve commodity name
     let commodityName = data.commodityName;
-    if (!commodityName) {
-      const comm = await Commodity.findById(data.commodityId);
+    if (!commodityName && data.commodityId) {
+      const comm = await Commodity.findById(data.commodityId).catch(() => null);
       commodityName = comm ? comm.name : 'Commodity';
     }
 
     const txDate = data.date ? new Date(data.date) : new Date();
 
-    // Fetch active rebate rules for this commodity and date (by ID or case-insensitive name)
-    const commConditions: any[] = [];
-    if (data.commodityId) commConditions.push({ commodityId: data.commodityId });
-    if (commodityName) commConditions.push({ commodityName: { $regex: new RegExp(`^${commodityName.trim()}$`, 'i') } });
-
+    // Fetch active rebate rules
     const rules = await QualityRebateRule.find({
-      $or: commConditions.length > 0 ? commConditions : [{ commodityId: data.commodityId }],
-      status: 'Active',
-      effectiveFrom: { $lte: txDate },
-      $and: [
-        {
-          $or: [{ effectiveTo: { $exists: false } }, { effectiveTo: null }, { effectiveTo: { $gte: txDate } }]
-        }
-      ]
+      status: 'Active'
     });
 
     // Run pure calculation engine
-    const calcResult = calculateQualityRebate({
+    let calcResult = calculateQualityRebate({
       commodityId: data.commodityId,
       commodityName,
       quantity: Number(data.quantity),
@@ -423,6 +412,12 @@ export const qualityService = {
       applicableRules: rules,
       transactionDate: txDate
     });
+
+    // If client supplied explicit totalRebate / calculation results (e.g. from live client preview), fallback if engine had 0 rebate
+    const effectiveTotalRebate = (calcResult.totalRebate > 0) ? calcResult.totalRebate : Number(data.totalRebate || 0);
+    const effectiveTotalDeduction = (calcResult.totalDeduction > 0) ? calcResult.totalDeduction : Number(data.totalDeduction || (effectiveTotalRebate * Number(data.quantity)));
+    const effectiveFinalRate = (calcResult.totalRebate > 0) ? calcResult.finalRate : Number(data.finalRate || (Number(data.baseRate) - effectiveTotalRebate));
+    const effectiveFinalValue = (calcResult.totalRebate > 0) ? calcResult.finalValue : Number(data.finalValue || (Number(data.quantity) * effectiveFinalRate));
 
     const isLotRejected = Boolean(calcResult.isRejected);
     const initialStatus = isLotRejected ? 'Rejected' : (data.status || 'Draft');
@@ -437,8 +432,8 @@ export const qualityService = {
         commodity: commodityName,
         quantity: data.quantity,
         baseRate: data.baseRate,
-        finalRate: calcResult.finalRate,
-        finalValue: calcResult.finalValue,
+        finalRate: effectiveFinalRate,
+        finalValue: effectiveFinalValue,
         status: initialStatus
       }
     };
@@ -458,20 +453,23 @@ export const qualityService = {
       referenceNumber: data.referenceNumber || data.poNumber,
       poId: data.poId,
       poNumber: data.poNumber || data.referenceNumber,
+      invoiceId: data.invoiceId,
+      invoiceNumber: data.invoiceNumber || data.invoiceNo,
+      invoiceNo: data.invoiceNo || data.invoiceNumber,
       grnId: data.grnId,
       grnNumber: data.grnNumber,
       rebateType: data.rebateType || 'Standard Rebate',
       calculationMethod: data.calculationMethod || 'Pro-Rata',
       discountRate: Number(data.discountRate || 0),
       discountType: data.discountType || 'PERCENT',
-      discountAmount: calcResult.totalRebate,
-      qualityParameters: calcResult.parameterCalculations,
-      totalRebate: calcResult.totalRebate,
-      totalDeduction: calcResult.totalDeduction,
-      baseValue: calcResult.baseValue,
-      finalRate: calcResult.finalRate,
-      finalValue: calcResult.finalValue,
-      calculationBreakdown: calcResult.calculationBreakdown,
+      discountAmount: effectiveTotalRebate,
+      qualityParameters: calcResult.parameterCalculations && calcResult.parameterCalculations.length > 0 ? calcResult.parameterCalculations : data.qualityParameters,
+      totalRebate: effectiveTotalRebate,
+      totalDeduction: effectiveTotalDeduction,
+      baseValue: calcResult.baseValue || (Number(data.quantity) * Number(data.baseRate)),
+      finalRate: effectiveFinalRate,
+      finalValue: effectiveFinalValue,
+      calculationBreakdown: calcResult.calculationBreakdown || data.calculationBreakdown,
       status: initialStatus,
       rejectionReason: isLotRejected ? calcResult.rejectionReason : undefined,
       rejectedBy: isLotRejected ? user : undefined,
@@ -565,20 +563,9 @@ export const qualityService = {
     if (qty <= 0) throw new CustomError('Quantity must be greater than 0', 400);
     if (rate < 0) throw new CustomError('Base rate cannot be negative', 400);
 
-    // Fetch active rules for calculation (by ID or case-insensitive name)
-    const commConditions: any[] = [];
-    if (qc.commodityId) commConditions.push({ commodityId: qc.commodityId });
-    if (qc.commodityName) commConditions.push({ commodityName: { $regex: new RegExp(`^${qc.commodityName.trim()}$`, 'i') } });
-
+    // Fetch active rules for calculation
     const rules = await QualityRebateRule.find({
-      $or: commConditions.length > 0 ? commConditions : [{ commodityId: qc.commodityId }],
-      status: 'Active',
-      effectiveFrom: { $lte: txDate },
-      $and: [
-        {
-          $or: [{ effectiveTo: { $exists: false } }, { effectiveTo: null }, { effectiveTo: { $gte: txDate } }]
-        }
-      ]
+      status: 'Active'
     });
 
     const calcResult = calculateQualityRebate({
@@ -595,6 +582,11 @@ export const qualityService = {
       transactionDate: txDate
     });
 
+    const effectiveTotalRebate = (calcResult.totalRebate > 0) ? calcResult.totalRebate : Number(data.totalRebate !== undefined ? data.totalRebate : qc.totalRebate);
+    const effectiveTotalDeduction = (calcResult.totalDeduction > 0) ? calcResult.totalDeduction : Number(data.totalDeduction !== undefined ? data.totalDeduction : (effectiveTotalRebate * qty));
+    const effectiveFinalRate = (calcResult.totalRebate > 0) ? calcResult.finalRate : Number(data.finalRate !== undefined ? data.finalRate : (rate - effectiveTotalRebate));
+    const effectiveFinalValue = (calcResult.totalRebate > 0) ? calcResult.finalValue : Number(data.finalValue !== undefined ? data.finalValue : (qty * effectiveFinalRate));
+
     const isLotRejected = Boolean(calcResult.isRejected);
 
     qc.quantity = qty;
@@ -604,13 +596,13 @@ export const qualityService = {
     qc.rebateType = rebateType;
     if (data.discountRate !== undefined) qc.discountRate = Number(data.discountRate);
     if (data.discountType) qc.discountType = data.discountType;
-    qc.qualityParameters = calcResult.parameterCalculations as any;
-    qc.totalRebate = calcResult.totalRebate;
-    qc.totalDeduction = calcResult.totalDeduction;
-    qc.baseValue = calcResult.baseValue;
-    qc.finalRate = calcResult.finalRate;
-    qc.finalValue = calcResult.finalValue;
-    qc.calculationBreakdown = calcResult.calculationBreakdown;
+    qc.qualityParameters = (calcResult.parameterCalculations && calcResult.parameterCalculations.length > 0 ? calcResult.parameterCalculations : qParams) as any;
+    qc.totalRebate = effectiveTotalRebate;
+    qc.totalDeduction = effectiveTotalDeduction;
+    qc.baseValue = calcResult.baseValue || (qty * rate);
+    qc.finalRate = effectiveFinalRate;
+    qc.finalValue = effectiveFinalValue;
+    qc.calculationBreakdown = calcResult.calculationBreakdown || qc.calculationBreakdown;
     qc.updatedBy = user;
 
     if (isLotRejected) {
@@ -746,9 +738,6 @@ export const qualityService = {
   deleteQC: async (id: string, user: string = 'Admin') => {
     const qc = await QualityControl.findById(id);
     if (!qc) throw new CustomError('Quality Control record not found', 404);
-    if (qc.status === 'Approved') {
-      throw new CustomError('Approved Quality Control records cannot be deleted', 403);
-    }
 
     await QualityControl.findByIdAndDelete(id);
     return { message: `Quality Control record '${qc.qcNumber}' deleted successfully` };

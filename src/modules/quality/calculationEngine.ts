@@ -199,18 +199,16 @@ export function calculateQualityRebate(input: CalculationInput): QualityCalculat
   for (const param of paramsToProcess) {
     const matchingRule = applicableRules.find(rule => {
       // 1. Commodity matching
-      if (commodityId && rule.commodityId && String(rule.commodityId) !== String(commodityId)) {
-        if (!commodityName || !rule.commodityName || rule.commodityName.toLowerCase().trim() !== commodityName.toLowerCase().trim()) {
-          return false;
-        }
+      if (rule.commodityId && commodityId && String(rule.commodityId) === String(commodityId)) {
+        // Direct ID match
+      } else if (rule.commodityName && commodityName && rule.commodityName.toLowerCase().trim() === commodityName.toLowerCase().trim()) {
+        // Direct Name match
+      } else if (!rule.commodityId && !rule.commodityName) {
+        // Global rule across commodities
+      } else if (commodityId || commodityName) {
+        // Rule belongs to a different commodity
+        return false;
       }
-      if (commodityName && rule.commodityName && rule.commodityName.toLowerCase().trim() !== commodityName.toLowerCase().trim()) {
-        if (!commodityId || !rule.commodityId || String(rule.commodityId) !== String(commodityId)) {
-          return false;
-        }
-      }
-
-      // 2. Parameter name matching
       const nameMatch = rule.parameterName?.toLowerCase().trim() === param.parameterName?.toLowerCase().trim();
       if (!nameMatch) return false;
 

@@ -419,6 +419,55 @@ export const salesService = {
     });
   },
 
+  createInvoice: async (data: any, createdBy: string) => {
+    let customerId = data.customerId;
+    const invoiceNo = data.invoiceNo || `INV-${Date.now()}`;
+
+    // Check if invoice already exists
+    const existing = await SalesInvoice.findOne({ invoiceNo });
+    if (existing) {
+      return existing;
+    }
+
+    const newInvoice = new SalesInvoice({
+      ...data,
+      invoiceNo,
+      customerId,
+      createdBy: createdBy || 'System'
+    });
+
+    await newInvoice.save();
+    return newInvoice;
+  },
+
+  recordPayment: async (invoiceId: string, paymentData: any) => {
+    const invoice = await SalesInvoice.findById(invoiceId) || await SalesInvoice.findOne({ invoiceNo: invoiceId });
+    if (!invoice) throw new Error('Invoice not found');
+
+    const currentPaid = invoice.amountPaid || 0;
+    const amount = Number(paymentData.amount) || 0;
+    const newPaid = currentPaid + amount;
+    const newRemaining = Math.max(0, invoice.grandTotal - newPaid);
+    const newStatus = newRemaining === 0 ? 'Paid' : 'Partially Paid';
+
+    invoice.amountPaid = newPaid;
+    invoice.remainingAmount = newRemaining;
+    invoice.paymentStatus = newStatus as any;
+    if (!invoice.paymentLogs) invoice.paymentLogs = [];
+    invoice.paymentLogs.push({
+      date: paymentData.date || new Date().toISOString().split('T')[0],
+      amount,
+      mode: paymentData.mode || 'Bank Transfer',
+      account: paymentData.account || 'HDFC Bank Collection A/c',
+      reference: paymentData.reference || '',
+      notes: paymentData.notes || '',
+      recordedAt: new Date()
+    });
+
+    await invoice.save();
+    return invoice;
+  },
+
   listInvoices: async () => {
     return await SalesInvoice.find({}).sort({ invoiceDate: -1 });
   },
